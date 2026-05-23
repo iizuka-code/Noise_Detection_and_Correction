@@ -8,6 +8,7 @@
 - 2026-05-21: 強補正用 `aggressive` method、JPEG入力対応、ローカルHTMLテストUIを追加。
 - 2026-05-23: `NLP_davinci` の `red_highlight_v1` を基に、赤照明検査画像から白黒マスクを生成する最小検出コアとCLIを追加。
 - 2026-05-23: ローカルHTMLテストUIに赤照明画像モードを追加し、`/api/repair-red` でマスク生成から補修まで実行できるようにした。
+- 2026-05-23: 実画像に近い小型合成fixtureで、赤照明検出、端グロー抑制、生成マスク補修、マスク外不変性の統合回帰テストを追加。
 
 ## 1. このリポジトリの位置づけ
 
@@ -61,7 +62,9 @@ dust-mask-repair/
     test_invariance.py
     test_mask_loading.py
     test_red_highlight.py
+    test_red_highlight_regression.py
     test_repair.py
+    test_server.py
 ```
 
 ## 4. 依存関係
@@ -585,7 +588,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは24件あります。
+テストは25件あります。
 
 ### 14.1 `tests/test_mask_loading.py`
 
@@ -640,6 +643,26 @@ outside/insideの判定は `soft_mask > 0.0` です。
 15. `test_jpeg_input_can_be_read_for_cli_workflows`
    - JPEG入力を読み込めること。
 
+### 14.5 `tests/test_red_highlight.py`
+
+- 赤照明検査画像から局所的な赤い埃・塵を検出できること。
+- 画像端の広い赤グローを抑制できること。
+- `tight` / `wide` のmask edge modeで境界サイズが変わること。
+- sourceサイズとpreviewサイズが異なる場合も、最終マスクがsource寸法で返ること。
+- CLIの検出出力、manifest、補修連結経路が動くこと。
+
+### 14.6 `tests/test_red_highlight_regression.py`
+
+- 粒状感、階調、エッジを含む小型合成フィルムスキャンfixtureで、赤照明検出から補修まで通す。
+- 同fixture内に検出対象の赤い埃・短い傷と、無視すべき画像端の赤グローを同居させる。
+- 生成マスクが対象欠陥を一定以上覆い、端グローをほぼ拾わないことを確認する。
+- 補修後も `soft_mask <= 0.0` の画素が完全一致し、対象欠陥領域の暗い汚れが改善することを確認する。
+
+### 14.7 `tests/test_server.py`
+
+- `/api/repair-red` が通常画像と赤照明画像を受け取り、生成マスクと補修画像URLを返すこと。
+- 通常画像と赤照明画像の寸法が異なる場合、400エラーで明示的に拒否すること。
+
 ## 15. 最終検証結果
 
 直近の確認結果:
@@ -651,7 +674,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-24 passed
+25 passed
 ```
 
 構文・ビルド確認:
@@ -824,7 +847,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 24件、pass確認済み。
+- テスト: 25件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。
