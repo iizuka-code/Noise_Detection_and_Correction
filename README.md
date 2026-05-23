@@ -1,0 +1,175 @@
+# Dust Mask Repair
+
+Mask-guided dust and spot repair for film scan images.
+
+This is a standalone Python library and CLI for repairing only the pixels indicated by a dust mask PNG. It is intended for workflows where dust has already been detected by a separate laser-lit capture and exported as a mask. It is not a tool that detects dust from the normal photo scan.
+
+## Purpose
+
+The tool treats dust and debris as local occlusion defects, not as ordinary image noise. The repair engine:
+
+- reads a normal RGB/RGBA scan image and a same-size mask PNG;
+- normalizes the mask to a float `0.0..1.0` mask;
+- filters implausibly small or large connected components;
+- optionally dilates and feathers the mask;
+- repairs each masked component in a padded ROI;
+- blends the candidate repair back only through the soft mask.
+
+Pixels outside the soft mask are forced back to the exact original values.
+
+## Installation
+
+```powershell
+py -3.12 -m pip install -e .[dev]
+```
+
+Runtime dependencies are intentionally small:
+
+- `numpy`: array processing and repair kernels.
+- `Pillow`: TIFF fallback and general image support.
+
+PNG read/write uses a small internal 8/16-bit reader/writer so RGB uint16 PNG data is not reduced to 8-bit by Pillow. For stronger TIFF support, install the optional `tiff` extra:
+
+```powershell
+py -3.12 -m pip install -e .[tiff]
+```
+
+## CLI
+
+```powershell
+dust-mask-repair `
+  --image input.png `
+  --mask dust_mask.png `
+  --output repaired.png `
+  --method hybrid `
+  --mask-channel auto `
+  --threshold 0.5 `
+  --dilate-radius 2 `
+  --feather-radius 2 `
+  --strength 1.0 `
+  --max-component-area 5000 `
+  --debug-dir debug_output
+```
+
+## Local HTML Test UI
+
+Run a local server and open the printed URL:
+
+```powershell
+py -3.12 -m dust_mask_repair.server --host 127.0.0.1 --port 8765
+```
+
+The HTML UI lets you select the image file and mask file, run repair, inspect mask/diff/metrics, and compare before/after with a slider. Outputs are written under `web_outputs/`.
+
+For testing the artifact guard that prevents dark stains on clean bright regions, open:
+
+```text
+http://127.0.0.1:8765/artifact_guard_test.html
+```
+
+Supported methods:
+
+- `median`: replaces masked pixels using ROI context median. Simple and conservative for tiny spots on smooth regions.
+- `inpaint`: uses a local diffusion-style fill from surrounding known pixels. It does not use OpenCV and does not quantize 16-bit images to 8-bit.
+- `denoise`: applies a small local blur only to masked pixels.
+- `hybrid`: uses diffusion fill for small regions, median for larger kept regions, then a very light masked smoothing pass.
+- `aggressive`: stronger masked replacement for review/testing. It combines diffusion fill, surrounding-ring median replacement, repeated masked smoothing, and a local artifact guard that rejects changes likely to create dark stains on already-clean bright areas.
+
+## Python API
+
+```python
+from dust_mask_repair import RepairConfig, repair_image
+
+config = RepairConfig(
+    method="hybrid",
+    mask_channel="auto",
+    threshold=0.5,
+    dilate_radius=2,
+    feather_radius=2,
+    strength=1.0,
+    min_component_area=1,
+    max_component_area=5000,
+    padding=16,
+)
+
+result = repair_image(image, mask, config)
+
+repaired = result.repaired_image
+binary_mask = result.binary_mask
+soft_mask = result.soft_mask
+metrics = result.metrics
+```
+
+`RepairResult` includes:
+
+- `repaired_image`
+- `binary_mask`
+- `soft_mask`
+- `changed_bbox_list`
+- `metrics`
+- `debug_images`
+- `debug_paths` when `debug_dir` is set
+
+## Mask PNG Specification
+
+The mask image must match the input image width and height. Automatic resizing and automatic alignment are intentionally not implemented in the MVP.
+
+`--mask-channel` supports:
+
+- `auto`
+- `grayscale`
+- `alpha`
+- `red`
+- `max_rgb`
+
+`auto` chooses alpha if a useful alpha channel exists, grayscale if RGB channels are identical, red if the red channel clearly dominates, otherwise `max_rgb`.
+
+## Debug Output
+
+When `--debug-dir` is set, the tool writes:
+
+- `normalized_mask.png`
+- `binary_mask.png`
+- `soft_mask.png`
+- `repaired_preview.png`
+- `diff_visualization.png`
+- `metrics.json`
+
+Metrics include:
+
+- `changed_pixel_count`
+- `changed_bbox_count`
+- `max_abs_diff_outside_mask`
+- `mean_abs_diff_inside_mask`
+- `mean_abs_diff_outside_mask`
+- `processing_time_ms`
+
+## 8-bit and 16-bit Status
+
+- 8-bit RGB/RGBA PNG: supported.
+- 8-bit JPEG input/output: supported through Pillow. JPEG output is lossy and not recommended as a preservation format.
+- 16-bit RGB/RGBA PNG: supported by the internal PNG path.
+- 8-bit TIFF: supported through Pillow.
+- 16-bit RGB/RGBA TIFF: supported when optional `tifffile` is installed. Without `tifffile`, Pillow may not preserve 16-bit RGB TIFF data, so writing 16-bit RGB/RGBA TIFF raises an error.
+
+ICC profiles and most metadata are not preserved in this MVP. The output is pixel-data focused.
+
+## Known Limits
+
+- Dust detection is out of scope. A mask PNG must already exist.
+- No automatic image/mask registration.
+- No default resizing when dimensions differ.
+- No global denoise, blur, sharpening, or color correction.
+- No generative AI, diffusion model, GAN, or large ML inpainting model.
+- The built-in `inpaint` method is a deterministic local fill, not OpenCV Telea/Navier-Stokes.
+- Large scratches may need a separate scratch-oriented mode later; large components are excluded by default with `--max-component-area`.
+
+## Future Integration Notes
+
+When integrating with the film negative converter:
+
+- apply identical geometric transforms to the image and mask;
+- crop, rotation, and resize can shift mask coordinates;
+- compare applying repair to the scan-stage RGB image versus the inverted RGB image;
+- add integration tests that verify mask-outside pixel invariance;
+- keep repair as a local masked stage, separate from global noise reduction and color transforms.

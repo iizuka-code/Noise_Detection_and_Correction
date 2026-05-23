@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dust-mask-repair"
+version = "0.1.0"
+description = "Mask-guided dust and spot repair for film scan images."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Dust Mask Repair contributors" }
+]
+dependencies = [
+  "numpy>=1.24",
+  "Pillow>=10.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0"
+]
+tiff = [
+  "tifffile>=2024.0"
+]
+
+[project.scripts]
+dust-mask-repair = "dust_mask_repair.cli:main"
+dust-mask-repair-web = "dust_mask_repair.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

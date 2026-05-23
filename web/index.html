@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dust Mask Repair Test</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #5d6b7a;
+      --line: #d8dee6;
+      --accent: #1f7a8c;
+      --accent-dark: #155867;
+      --danger: #b42318;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .controls {
+      padding: 16px;
+    }
+    .field {
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+    input,
+    select,
+    button {
+      width: 100%;
+      font: inherit;
+    }
+    input[type="file"],
+    input[type="number"],
+    select {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+    input[type="range"] {
+      accent-color: var(--accent);
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    button {
+      padding: 11px 14px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+    button:hover:not(:disabled) {
+      background: var(--accent-dark);
+    }
+    .status {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    .error {
+      color: var(--danger);
+    }
+    .viewer {
+      min-width: 0;
+      padding: 16px;
+    }
+    .compare {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      min-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #111820;
+      --split: 50%;
+    }
+    .compare.has-result {
+      min-height: 0;
+    }
+    .compare img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 78vh;
+      object-fit: contain;
+      background: #111820;
+    }
+    .compare .before-layer {
+      position: relative;
+      z-index: 1;
+    }
+    .compare .after-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      max-height: none;
+      object-fit: contain;
+      clip-path: inset(0 calc(100% - var(--split)) 0 0);
+      pointer-events: none;
+    }
+    .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: var(--split);
+      z-index: 4;
+      width: 2px;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      pointer-events: none;
+    }
+    .compare-badge {
+      position: absolute;
+      z-index: 5;
+      top: 12px;
+      padding: 7px 10px;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      background: rgba(0, 0, 0, 0.72);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      pointer-events: none;
+    }
+    .compare-badge.after {
+      left: 12px;
+      background: rgba(31, 122, 140, 0.92);
+    }
+    .compare-badge.before {
+      right: 12px;
+      background: rgba(23, 32, 42, 0.88);
+    }
+    .placeholder {
+      display: grid;
+      place-items: center;
+      min-height: 420px;
+      color: #c9d3de;
+      text-align: center;
+      padding: 24px;
+    }
+    .slider-row {
+      margin: 12px 0 16px;
+    }
+    .views {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .thumb {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+    }
+    .thumb h2 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+    .thumb img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 260px;
+      object-fit: contain;
+      background: #111820;
+    }
+    pre {
+      max-height: 260px;
+      overflow: auto;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+    @media (max-width: 980px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .views {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dust Mask Repair Test UI</h1>
+  </header>
+  <main>
+    <section class="controls">
+      <form id="repairForm">
+        <div class="field">
+          <label for="image">補正を掛けるファイル</label>
+          <input id="image" name="image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,image/*" required>
+        </div>
+        <div class="field">
+          <label for="mask">マスクPNG</label>
+          <input id="mask" name="mask" type="file" accept=".png,.tif,.tiff,image/*" required>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="method">method</label>
+            <select id="method" name="method">
+              <option value="aggressive" selected>aggressive</option>
+              <option value="hybrid">hybrid</option>
+              <option value="inpaint">inpaint</option>
+              <option value="median">median</option>
+              <option value="denoise">denoise</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="mask_channel">mask channel</label>
+            <select id="mask_channel" name="mask_channel">
+              <option value="grayscale" selected>grayscale</option>
+              <option value="auto">auto</option>
+              <option value="alpha">alpha</option>
+              <option value="red">red</option>
+              <option value="max_rgb">max_rgb</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="threshold">threshold</label>
+            <input id="threshold" name="threshold" type="number" min="0" max="1" step="0.01" value="0.5">
+          </div>
+          <div class="field">
+            <label for="strength">strength</label>
+            <input id="strength" name="strength" type="number" min="0" max="1" step="0.05" value="1.0">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="dilate_radius">dilate radius</label>
+            <input id="dilate_radius" name="dilate_radius" type="number" min="0" step="1" value="1">
+          </div>
+          <div class="field">
+            <label for="feather_radius">feather radius</label>
+            <input id="feather_radius" name="feather_radius" type="number" min="0" step="1" value="1">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="padding">padding</label>
+            <input id="padding" name="padding" type="number" min="0" step="1" value="32">
+          </div>
+          <div class="field">
+            <label for="max_component_area">max component area</label>
+            <input id="max_component_area" name="max_component_area" type="number" min="1" step="1" value="200000">
+          </div>
+        </div>
+        <div class="field">
+          <label for="min_component_area">min component area</label>
+          <input id="min_component_area" name="min_component_area" type="number" min="0" step="1" value="1">
+        </div>
+        <button id="runButton" type="submit">実行</button>
+        <p id="status" class="status"></p>
+      </form>
+    </section>
+
+    <section class="viewer">
+      <div id="compare" class="compare">
+        <div class="placeholder">画像とマスクを選択して実行してください。</div>
+      </div>
+      <div class="slider-row">
+        <input id="split" type="range" min="0" max="100" value="50">
+      </div>
+      <div class="views">
+        <div class="thumb">
+          <h2>Mask</h2>
+          <img id="maskPreview" alt="">
+        </div>
+        <div class="thumb">
+          <h2>Diff</h2>
+          <img id="diffPreview" alt="">
+        </div>
+        <div class="thumb">
+          <h2>Metrics</h2>
+          <pre id="metrics">{}</pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("repairForm");
+    const statusEl = document.getElementById("status");
+    const button = document.getElementById("runButton");
+    const compare = document.getElementById("compare");
+    const split = document.getElementById("split");
+    const maskPreview = document.getElementById("maskPreview");
+    const diffPreview = document.getElementById("diffPreview");
+    const metricsEl = document.getElementById("metrics");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      statusEl.classList.remove("error");
+      statusEl.textContent = "処理中です。大きい画像では時間がかかります。";
+      button.disabled = true;
+      try {
+        const data = new FormData(form);
+        const response = await fetch("/api/repair", { method: "POST", body: data });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "repair failed");
+        }
+        renderResult(payload);
+        statusEl.textContent = `完了: run ${payload.run_id}`;
+      } catch (error) {
+        statusEl.classList.add("error");
+        statusEl.textContent = String(error.message || error);
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    split.addEventListener("input", () => {
+      compare.style.setProperty("--split", `${split.value}%`);
+    });
+
+    function renderResult(payload) {
+      const cache = `?t=${Date.now()}`;
+      compare.classList.add("has-result");
+      compare.style.setProperty("--split", `${split.value}%`);
+      compare.innerHTML = `
+        <img class="before-layer" src="${payload.input_url}${cache}" alt="補正前">
+        <img class="after-layer" src="${payload.repaired_url}${cache}" alt="補正後">
+        <div class="compare-badge after">補正後</div>
+        <div class="compare-badge before">補正前</div>
+        <div class="divider"></div>
+      `;
+      maskPreview.src = `${payload.mask_url}${cache}`;
+      diffPreview.src = `${payload.diff_url}${cache}`;
+      metricsEl.textContent = JSON.stringify(payload.metrics, null, 2);
+    }
+  </script>
+</body>
+</html>
