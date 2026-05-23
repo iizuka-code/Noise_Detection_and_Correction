@@ -20,6 +20,7 @@ class RepairConfig:
     max_component_area: int | None = 5000
     padding: int = 16
     debug_dir: str | Path | None = None
+    collect_debug_images: bool = False
 
     def validate(self) -> None:
         if self.method not in REPAIR_METHODS:

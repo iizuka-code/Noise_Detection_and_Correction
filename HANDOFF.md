@@ -11,6 +11,7 @@
 - 2026-05-23: 実画像に近い小型合成fixtureで、赤照明検出、端グロー抑制、生成マスク補修、マスク外不変性の統合回帰テストを追加。
 - 2026-05-23: 明示オプション `include_long_scratches` による細長い赤スクラッチ検出を追加。通常モードでは従来通り大きい/長い成分を除外する。
 - 2026-05-23: `dust-mask-benchmark` を追加し、赤照明検出からマスク補修までの処理時間・生成マスク画素数・tracemallocピークをJSONで記録できるようにした。
+- 2026-05-23: 補修時のデバッグ画像生成を `debug_dir` または `collect_debug_images=True` の時だけに変更し、通常処理とベンチマーク時のメモリ/時間を削減。
 
 ## 1. このリポジトリの位置づけ
 
@@ -309,6 +310,7 @@ min_component_area: int = 1
 max_component_area: int | None = 5000
 padding: int = 16
 debug_dir: str | Path | None = None
+collect_debug_images: bool = False
 ```
 
 `validate()` で以下をチェックします。
@@ -321,6 +323,7 @@ debug_dir: str | Path | None = None
 - `min_component_area` は0以上。
 - `max_component_area` が `None` でない場合は `min_component_area` 以上。
 - `padding` は0以上。
+- `collect_debug_images=True` の場合、`debug_dir` がなくても `RepairResult.debug_images` を生成。
 
 ### 7.2 `RepairResult`
 
@@ -341,6 +344,7 @@ debug_paths: dict[str, str]
 `binary_mask` は threshold、成分フィルタ、dilate 後のboolマスクです。  
 `soft_mask` は feather 後のfloat32マスクです。  
 `changed_bbox_list` は `soft_mask > 0.0` の連結成分bboxです。
+`debug_images` は `debug_dir` 指定時、または `collect_debug_images=True` の時だけ生成されます。
 
 ## 8. 処理パイプライン
 
@@ -373,7 +377,7 @@ debug_paths: dict[str, str]
 17. RGBのみ `original * (1 - alpha) + repair_candidate * alpha` で合成。
 18. `alpha <= 0.0` の画素は、float段階でもdtype復元後でも元画像で強制上書き。
 19. `restore_dtype()` で元dtypeへ戻す。
-20. metrics、debug_images、必要ならdebug_pathsを返す。
+20. metrics、必要ならdebug_images/debug_pathsを返す。
 
 非常に重要な点:
 
@@ -628,13 +632,13 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 注意:
 
-- `debug_images` は `debug_dir` 指定なしでも常に作成しています。大画像ではメモリ使用量に注意。
+- `debug_images` は `debug_dir` 指定時、または `collect_debug_images=True` の時だけ作成します。大画像の通常処理では余分なデバッグ配列を持たない設計です。
 - `repaired_preview.png` は `repaired_image` そのものを書きます。入力が16bit PNGなら16bit PNGとして保存されます。
 - `diff_visualization.png` は赤に差分、緑にsoft maskを入れたuint8 RGB可視化です。
 
 ## 14. テスト構成
 
-テストは29件あります。
+テストは30件あります。
 
 ### 14.1 `tests/test_benchmark.py`
 
@@ -693,6 +697,8 @@ outside/insideの判定は `soft_mask > 0.0` です。
    - `aggressive` methodでもsoft mask外が完全一致すること。
 15. `test_jpeg_input_can_be_read_for_cli_workflows`
    - JPEG入力を読み込めること。
+16. `test_debug_images_are_opt_in_without_debug_dir`
+   - `debug_dir` なしの通常補修では `debug_images` を作らず、`collect_debug_images=True` でのみ保持すること。
 
 ### 14.6 `tests/test_red_highlight.py`
 
@@ -727,7 +733,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-29 passed
+30 passed
 ```
 
 構文・ビルド確認:
@@ -755,14 +761,16 @@ py -3.12 -m dust_mask_repair.benchmark --width 640 --height 426 --iterations 3 -
 結果 summary:
 
 ```text
-detect_ms median: 1131.950
-repair_ms median: 694.302
-total_ms median: 1826.264
-peak_traced_memory_bytes median: 37779788
+detect_ms median: 1087.830
+repair_ms median: 655.025
+total_ms median: 1741.270
+peak_traced_memory_bytes median: 37780341
 final_mask_pixels: 4820
 changed_pixel_count: 5857
 max_abs_diff_outside_mask_max: 0.0
 ```
+
+参考: `debug_images` 常時生成時の同条件では、repair中央値 `694.302 ms`、total中央値 `1826.264 ms`、peak traced memory中央値 `37779788 bytes` でした。今回の変更ではrepair/totalは改善し、peak traced memoryは赤検出側の大きな中間配列が支配しているため横ばいです。
 
 ## 16. 品質上の最重要条件
 
@@ -800,9 +808,8 @@ max_abs_diff_outside_mask_max: 0.0
 
 ### 17.3 メモリ
 
-- `debug_images` は常に作られます。
-- 大きな16bit画像では `original`, `image_float`, `repair_candidate`, `output_float`, `debug_images` が同時に存在します。
-- 将来、本体統合時にはdebug image生成をオプション化した方がよいです。
+- `debug_images` は必要時のみ作られます。
+- 大きな16bit画像では `original`, `image_float`, `repair_candidate`, `output_float` が同時に存在します。`debug_dir` または `collect_debug_images=True` を使う場合は、さらにデバッグ配列のメモリが必要です。
 
 ### 17.4 I/O
 
@@ -835,10 +842,9 @@ max_abs_diff_outside_mask_max: 0.0
 優先度高:
 
 1. 実フィルムスキャン画像サイズでベンチマークを継続取得し、最適化前後の比較値を残す。
-2. `debug_images` を必要時のみ作る設定を追加。
-3. `feather_radius > 0` のテストを追加し、変更可能範囲が `dilate + feather` に収まることを検証。
-4. 大きすぎる成分を除外した時の警告またはstructured diagnosticsを追加。
-5. `max_component_area=None` をCLIで指定できる表現を追加するか、明示的に禁止としてREADMEに書く。
+2. `feather_radius > 0` のテストを追加し、変更可能範囲が `dilate + feather` に収まることを検証。
+3. 大きすぎる成分を除外した時の警告またはstructured diagnosticsを追加。
+4. `max_component_area=None` をCLIで指定できる表現を追加するか、明示的に禁止としてREADMEに書く。
 
 優先度中:
 
@@ -918,7 +924,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 29件、pass確認済み。
+- テスト: 30件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。

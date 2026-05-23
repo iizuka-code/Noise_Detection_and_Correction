@@ -173,7 +173,7 @@ metrics = result.metrics
 - `soft_mask`
 - `changed_bbox_list`
 - `metrics`
-- `debug_images`
+- `debug_images` when `collect_debug_images=True` or `debug_dir` is set
 - `debug_paths` when `debug_dir` is set
 
 ## Mask PNG Specification
@@ -200,6 +200,8 @@ When `--debug-dir` is set, the tool writes:
 - `repaired_preview.png`
 - `diff_visualization.png`
 - `metrics.json`
+
+For Python API callers, `RepairConfig(collect_debug_images=True)` keeps the same debug arrays in `RepairResult.debug_images` without writing them to disk. The default is `False` to avoid extra work and memory use during normal repair.
 
 Metrics include:
 

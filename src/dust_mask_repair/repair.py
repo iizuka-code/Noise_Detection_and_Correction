@@ -61,6 +61,7 @@ def repair_image(image: np.ndarray, mask: np.ndarray, config: RepairConfig | Non
     binary_mask = dilate_mask(filtered.mask, cfg.dilate_radius)
     soft_mask = feather_mask(binary_mask, cfg.feather_radius)
     changed_bbox_list = bboxes_from_mask(soft_mask > 0.0)
+    collect_debug_images = bool(cfg.collect_debug_images or cfg.debug_dir is not None)
 
     if cfg.strength == 0.0 or not binary_mask.any():
         elapsed = (time.perf_counter() - start) * 1000.0
@@ -73,7 +74,9 @@ def repair_image(image: np.ndarray, mask: np.ndarray, config: RepairConfig | Non
             soft_mask=soft_mask,
             changed_bbox_list=changed_bbox_list,
             metrics=metrics,
-            debug_images=_debug_images(original, repaired, normalized_mask, binary_mask, soft_mask),
+            debug_images=_debug_images(original, repaired, normalized_mask, binary_mask, soft_mask)
+            if collect_debug_images
+            else {},
         )
         _write_debug_outputs(cfg.debug_dir, result)
         return result
@@ -112,7 +115,9 @@ def repair_image(image: np.ndarray, mask: np.ndarray, config: RepairConfig | Non
         soft_mask=soft_mask,
         changed_bbox_list=changed_bbox_list,
         metrics=metrics,
-        debug_images=_debug_images(original, repaired, normalized_mask, binary_mask, soft_mask),
+        debug_images=_debug_images(original, repaired, normalized_mask, binary_mask, soft_mask)
+        if collect_debug_images
+        else {},
     )
     _write_debug_outputs(cfg.debug_dir, result)
     return result

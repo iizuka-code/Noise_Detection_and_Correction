@@ -100,3 +100,18 @@ def test_aggressive_guard_does_not_create_dark_stain_on_clean_bright_area():
     center = result.repaired_image[18:22, 18:22]
     assert np.min(center[:, :, 0]) >= 240
     assert np.array_equal(result.repaired_image[result.soft_mask <= 0.0], image[result.soft_mask <= 0.0])
+
+
+def test_debug_images_are_opt_in_without_debug_dir():
+    image = _clean_image(shape=(24, 24))
+    image[10:12, 10:12] = [0, 0, 0]
+    mask = np.zeros(image.shape[:2], dtype=np.uint8)
+    mask[10:12, 10:12] = 255
+
+    fast_result = repair_image(image, mask, _strict_config())
+    debug_result = repair_image(image, mask, _strict_config(collect_debug_images=True))
+
+    assert fast_result.debug_images == {}
+    assert {"normalized_mask", "binary_mask", "soft_mask", "repaired_preview", "diff_visualization"}.issubset(
+        debug_result.debug_images
+    )
