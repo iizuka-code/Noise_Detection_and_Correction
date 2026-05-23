@@ -13,3 +13,4 @@ test_outputs/
 pytest-cache-files-*/
 pywrite_probe/
 web_outputs/
+benchmark_results/

@@ -96,6 +96,19 @@ dust-mask-detect-red `
 
 The same `--include-long-scratches` options are also accepted by `dust-mask-repair-red`.
 
+Benchmark red-highlight detection followed by masked repair:
+
+```powershell
+dust-mask-benchmark `
+  --width 1280 `
+  --height 853 `
+  --iterations 3 `
+  --warmup 1 `
+  --output-json benchmark_results/red_highlight_1280.json
+```
+
+This generates a deterministic synthetic scan and red-lit inspection image in memory, then reports detection time, repair time, total time, generated mask pixels, changed pixels, and traced peak memory. `peak_traced_memory_bytes` is measured with Python `tracemalloc` and may exclude some native allocations.
+
 ## Local HTML Test UI
 
 Run a local server and open the printed URL:

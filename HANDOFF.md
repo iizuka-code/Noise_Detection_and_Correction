@@ -10,6 +10,7 @@
 - 2026-05-23: ローカルHTMLテストUIに赤照明画像モードを追加し、`/api/repair-red` でマスク生成から補修まで実行できるようにした。
 - 2026-05-23: 実画像に近い小型合成fixtureで、赤照明検出、端グロー抑制、生成マスク補修、マスク外不変性の統合回帰テストを追加。
 - 2026-05-23: 明示オプション `include_long_scratches` による細長い赤スクラッチ検出を追加。通常モードでは従来通り大きい/長い成分を除外する。
+- 2026-05-23: `dust-mask-benchmark` を追加し、赤照明検出からマスク補修までの処理時間・生成マスク画素数・tracemallocピークをJSONで記録できるようにした。
 
 ## 1. このリポジトリの位置づけ
 
@@ -49,6 +50,7 @@ dust-mask-repair/
   src/
     dust_mask_repair/
       __init__.py
+      benchmark.py
       cli.py
       config.py
       io.py
@@ -59,6 +61,7 @@ dust-mask-repair/
       repair.py
       server.py
   tests/
+    test_benchmark.py
     test_cli.py
     test_invariance.py
     test_mask_loading.py
@@ -123,6 +126,7 @@ dust-mask-repair = "dust_mask_repair.cli:main"
 dust-mask-repair-web = "dust_mask_repair.server:main"
 dust-mask-detect-red = "dust_mask_repair.red_highlight_cli:main"
 dust-mask-repair-red = "dust_mask_repair.red_highlight_cli:repair_main"
+dust-mask-benchmark = "dust_mask_repair.benchmark:main"
 ```
 
 実行例:
@@ -202,7 +206,31 @@ dust-mask-detect-red `
 
 `dust-mask-repair-red` でも同じ赤検出オプションを指定できます。
 
-## 6.2 ローカルHTMLテストUI
+### 6.2 ベンチマークCLI
+
+赤照明検出から生成マスク補修までを、決定的な合成fixtureで測るCLIを追加しています。
+
+```powershell
+dust-mask-benchmark `
+  --width 1280 `
+  --height 853 `
+  --iterations 3 `
+  --warmup 1 `
+  --output-json benchmark_results/red_highlight_1280.json
+```
+
+出力JSONには以下を含みます。
+
+- `detect_ms`, `repair_ms`, `total_ms`
+- `component_count`
+- `final_mask_pixels`
+- `changed_pixel_count`
+- `max_abs_diff_outside_mask`
+- `peak_traced_memory_bytes`
+
+`peak_traced_memory_bytes` は Python `tracemalloc` による計測であり、一部のnative allocationは含まれない可能性があります。性能改善前後の相対比較用の基準として扱ってください。
+
+## 6.3 ローカルHTMLテストUI
 
 `src/dust_mask_repair/server.py` と `web/index.html` を追加しています。
 
@@ -606,9 +634,14 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは27件あります。
+テストは29件あります。
 
-### 14.1 `tests/test_mask_loading.py`
+### 14.1 `tests/test_benchmark.py`
+
+- `run_benchmark()` が赤照明検出と補修のsummaryを返すこと。
+- CLI入口がJSONファイルを書き、`include_long_scratches` 設定を反映すること。
+
+### 14.2 `tests/test_mask_loading.py`
 
 1. `test_grayscale_mask_loads_and_normalizes`
    - grayscale PNGを内部writerで保存し、readerで読み、`grayscale` として正規化できること。
@@ -621,7 +654,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 4. `test_rgb_grayscale_channel_normalizes_before_luma`
    - RGBを `grayscale` 指定した時、輝度化前に正規化され、128/255付近になること。
 
-### 14.2 `tests/test_repair.py`
+### 14.3 `tests/test_repair.py`
 
 5. `test_empty_mask_returns_exact_input`
    - 空マスクなら出力が入力と完全一致。
@@ -632,7 +665,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 8. `test_black_dust_is_repaired_only_in_mask`
    - 黒い埃を合成した画像で、マスク内だけ補修されること。
 
-### 14.3 `tests/test_invariance.py`
+### 14.4 `tests/test_invariance.py`
 
 9. `test_pixels_outside_soft_mask_are_unchanged`
    - `soft_mask <= 0.0` の画素が完全一致。
@@ -646,7 +679,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
    - 補修結果も `uint16`。
    - 255超の値が保持されること。
 
-### 14.4 `tests/test_cli.py`
+### 14.5 `tests/test_cli.py`
 
 13. `test_cli_writes_output_and_debug_dir`
    - `python -m dust_mask_repair.cli` 経由でCLIを実行。
@@ -661,7 +694,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 15. `test_jpeg_input_can_be_read_for_cli_workflows`
    - JPEG入力を読み込めること。
 
-### 14.5 `tests/test_red_highlight.py`
+### 14.6 `tests/test_red_highlight.py`
 
 - 赤照明検査画像から局所的な赤い埃・塵を検出できること。
 - 画像端の広い赤グローを抑制できること。
@@ -671,14 +704,14 @@ outside/insideの判定は `soft_mask > 0.0` です。
 - sourceサイズとpreviewサイズが異なる場合も、最終マスクがsource寸法で返ること。
 - CLIの検出出力、manifest、補修連結経路が動くこと。
 
-### 14.6 `tests/test_red_highlight_regression.py`
+### 14.7 `tests/test_red_highlight_regression.py`
 
 - 粒状感、階調、エッジを含む小型合成フィルムスキャンfixtureで、赤照明検出から補修まで通す。
 - 同fixture内に検出対象の赤い埃・短い傷と、無視すべき画像端の赤グローを同居させる。
 - 生成マスクが対象欠陥を一定以上覆い、端グローをほぼ拾わないことを確認する。
 - 補修後も `soft_mask <= 0.0` の画素が完全一致し、対象欠陥領域の暗い汚れが改善することを確認する。
 
-### 14.7 `tests/test_server.py`
+### 14.8 `tests/test_server.py`
 
 - `/api/repair-red` が通常画像と赤照明画像を受け取り、生成マスクと補修画像URLを返すこと。
 - 通常画像と赤照明画像の寸法が異なる場合、400エラーで明示的に拒否すること。
@@ -694,7 +727,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-27 passed
+29 passed
 ```
 
 構文・ビルド確認:
@@ -708,10 +741,28 @@ py -3.12 -m compileall src
 ```text
 Listing 'src'...
 Listing 'src\\dust_mask_repair'...
-Compiling 'src\\dust_mask_repair\\mask.py'...
 ```
 
-`compileall` は成功しています。最後に変更された `mask.py` のみ再コンパイル表示が出ました。
+`compileall` は成功しています。
+
+直近のベンチマーク確認:
+
+```powershell
+$env:PYTHONPATH = "src"
+py -3.12 -m dust_mask_repair.benchmark --width 640 --height 426 --iterations 3 --warmup 1 --detection-long-edge 640 --include-long-scratches --output-json test_outputs\benchmark\red_highlight_640.json
+```
+
+結果 summary:
+
+```text
+detect_ms median: 1131.950
+repair_ms median: 694.302
+total_ms median: 1826.264
+peak_traced_memory_bytes median: 37779788
+final_mask_pixels: 4820
+changed_pixel_count: 5857
+max_abs_diff_outside_mask_max: 0.0
+```
 
 ## 16. 品質上の最重要条件
 
@@ -745,7 +796,7 @@ Compiling 'src\\dust_mask_repair\\mask.py'...
 - 連結成分はPython stackベースです。巨大で密なマスクでは遅くなる可能性があります。
 - dilationは半径内offsetを全て走査します。
 - box blurは単純な二重ループで、積分画像やseparable filterではありません。
-- 現時点でベンチマークはありません。大きな実画像に入れる前に必要です。
+- `dust-mask-benchmark` で赤照明検出から補修までの処理時間を測れます。大きな実画像に近い条件では、width/height/iterationsを上げて再測定してください。
 
 ### 17.3 メモリ
 
@@ -783,7 +834,7 @@ Compiling 'src\\dust_mask_repair\\mask.py'...
 
 優先度高:
 
-1. 実フィルムスキャン画像サイズでベンチマークを追加。
+1. 実フィルムスキャン画像サイズでベンチマークを継続取得し、最適化前後の比較値を残す。
 2. `debug_images` を必要時のみ作る設定を追加。
 3. `feather_radius > 0` のテストを追加し、変更可能範囲が `dilate + feather` に収まることを検証。
 4. 大きすぎる成分を除外した時の警告またはstructured diagnosticsを追加。
@@ -867,14 +918,14 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 27件、pass確認済み。
+- テスト: 29件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。
 - 8/16bit PNG: 内部I/Oで対応。
 - 16bit TIFF: optional `tifffile` 前提。Pillow fallbackの限界あり。
 - マスク外不変性: `soft_mask <= 0.0` 基準でテスト済み。
-- ベンチマーク: 未実装。性能影響を評価する段階では次に追加が必要。
+- ベンチマーク: `dust-mask-benchmark` 実装済み。性能改善前後の比較用にJSON出力可能。
 - Lint/Format: 専用ツール未設定。`compileall` のみ確認済み。
 
 ## 22. 最重要の引き継ぎポイント
