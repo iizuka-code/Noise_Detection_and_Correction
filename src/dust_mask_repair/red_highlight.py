@@ -37,6 +37,11 @@ class RedHighlightConfig:
     max_area: int = 1400
     max_dim: int = 95
     max_aspect: float = 11.5
+    include_long_scratches: bool = False
+    min_scratch_aspect: float = 5.0
+    max_scratch_area: int = 9000
+    max_scratch_dim: int = 720
+    max_scratch_width: int = 48
     hot_core_max_ratio_relax: float = 0.55
     suppress_border_glow: bool = True
     border_x_fraction: float = 0.045
@@ -60,6 +65,14 @@ class RedHighlightConfig:
             raise ValueError("max_dim must be > 0")
         if self.max_aspect <= 0.0:
             raise ValueError("max_aspect must be > 0")
+        if self.min_scratch_aspect <= 0.0:
+            raise ValueError("min_scratch_aspect must be > 0")
+        if self.max_scratch_area < self.min_area:
+            raise ValueError("max_scratch_area must be >= min_area")
+        if self.max_scratch_dim <= 0:
+            raise ValueError("max_scratch_dim must be > 0")
+        if self.max_scratch_width <= 0:
+            raise ValueError("max_scratch_width must be > 0")
         if self.border_x_fraction < 0.0 or self.border_y_fraction < 0.0:
             raise ValueError("border fractions must be >= 0")
 
@@ -375,13 +388,22 @@ def _review_component(
         "reject_reason": "",
     }
     empty = np.zeros((1, 1), dtype=bool)
+    elongated = _is_elongated_scratch_candidate(
+        area=area,
+        bbox_height=bbox_height,
+        bbox_width=bbox_width,
+        max_dim=max_dim,
+        aspect=aspect,
+        config=config,
+    )
+    record["elongated_scratch"] = elongated
     if area < int(config.min_area):
         record["reject_reason"] = "area_min"
         return False, record, empty
-    if area > int(config.max_area) or max_dim > int(config.max_dim):
+    if not elongated and (area > int(config.max_area) or max_dim > int(config.max_dim)):
         record["reject_reason"] = "area_or_dim_max"
         return False, record, empty
-    if aspect > float(config.max_aspect) and area > 10:
+    if not elongated and aspect > float(config.max_aspect) and area > 10:
         record["reject_reason"] = "aspect"
         return False, record, empty
     if y0 <= 0 or x0 <= 0 or y1 >= height or x1 >= width:
@@ -480,6 +502,25 @@ def _review_component(
         return False, record, empty
     record["area_grown"] = area_grown
     return True, record, grown
+
+
+def _is_elongated_scratch_candidate(
+    area: int,
+    bbox_height: int,
+    bbox_width: int,
+    max_dim: int,
+    aspect: float,
+    config: RedHighlightConfig,
+) -> bool:
+    if not bool(config.include_long_scratches):
+        return False
+    min_dim = min(bbox_height, bbox_width)
+    return (
+        area <= int(config.max_scratch_area)
+        and max_dim <= int(config.max_scratch_dim)
+        and min_dim <= int(config.max_scratch_width)
+        and aspect >= float(config.min_scratch_aspect)
+    )
 
 
 def _final_mask_for_source(

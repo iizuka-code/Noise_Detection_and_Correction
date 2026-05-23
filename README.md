@@ -4,7 +4,7 @@ Mask-guided dust and spot repair for film scan images.
 
 This is a standalone Python library and CLI for repairing only the pixels indicated by a dust mask PNG. It is intended for workflows where dust has already been detected by a separate laser-lit capture and exported as a mask. The repair engine still does not detect dust from the normal photo scan.
 
-An optional red-highlight detector is included for workflows where a separate red-lit inspection capture makes dust, debris, or short scratches appear as bright red marks. That detector writes a black/white mask PNG that can be used by the repair engine.
+An optional red-highlight detector is included for workflows where a separate red-lit inspection capture makes dust, debris, or scratches appear as bright red marks. That detector writes a black/white mask PNG that can be used by the repair engine.
 
 ## Purpose
 
@@ -81,6 +81,20 @@ dust-mask-repair-red `
 ```
 
 `--image` and `--red-image` must already have matching dimensions. Automatic registration, rotation, crop matching, and perspective alignment are not implemented.
+
+Long red scratches are excluded by default because they have different false-positive risk from point dust. Enable elongated scratch detection explicitly:
+
+```powershell
+dust-mask-detect-red `
+  --source red_lit_scan.png `
+  --output-dir red_mask_output `
+  --include-long-scratches `
+  --max-scratch-dim 720 `
+  --max-scratch-width 48 `
+  --max-scratch-area 9000
+```
+
+The same `--include-long-scratches` options are also accepted by `dust-mask-repair-red`.
 
 ## Local HTML Test UI
 
@@ -202,8 +216,8 @@ ICC profiles and most metadata are not preserved in this MVP. The output is pixe
 - No global denoise, blur, sharpening, or color correction.
 - No generative AI, diffusion model, GAN, or large ML inpainting model.
 - The built-in `inpaint` method is a deterministic local fill, not OpenCV Telea/Navier-Stokes.
-- Large scratches may need a separate scratch-oriented mode later; large components are excluded by default with `--max-component-area`.
-- The red-highlight detector is tuned for red illuminated dust, debris, and short defects. Long scratches may require a dedicated elongated-defect mode.
+- Large repair regions are still bounded by `--max-component-area` in the repair stage.
+- The red-highlight detector is tuned for red illuminated dust, debris, and short defects by default. Long scratches require explicit `--include-long-scratches` detection settings.
 
 ## Future Integration Notes
 

@@ -146,6 +146,11 @@ class RepairWebHandler(BaseHTTPRequestHandler):
             min_area=_form_int(form, "min_red_area", 1),
             max_area=_form_int(form, "max_red_area", 1400),
             max_dim=_form_int(form, "max_red_dim", 95),
+            include_long_scratches=_form_bool(form, "include_long_scratches", False),
+            min_scratch_aspect=_form_float(form, "min_scratch_aspect", 5.0),
+            max_scratch_area=_form_int(form, "max_scratch_area", 9000),
+            max_scratch_dim=_form_int(form, "max_scratch_dim", 720),
+            max_scratch_width=_form_int(form, "max_scratch_width", 48),
             suppress_border_glow=_form_bool(form, "suppress_border_glow", True),
         )
 

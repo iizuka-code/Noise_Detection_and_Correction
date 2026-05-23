@@ -13,7 +13,7 @@ from .repair import repair_image
 def build_detect_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dust-mask-detect-red",
-        description="Detect red-highlighted dust, debris, and short defects as a black/white mask.",
+        description="Detect red-highlighted dust, debris, and optionally long scratches as a black/white mask.",
     )
     _add_red_detection_arguments(parser)
     parser.add_argument("--source", required=True, help="Input red-highlight RGB image.")
@@ -125,6 +125,15 @@ def _add_red_detection_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--min-red-area", type=int, default=1)
     parser.add_argument("--max-red-area", type=int, default=1400)
     parser.add_argument("--max-red-dim", type=int, default=95)
+    parser.add_argument(
+        "--include-long-scratches",
+        action="store_true",
+        help="Also keep thin elongated red components that exceed the normal dust/debris size limits.",
+    )
+    parser.add_argument("--min-scratch-aspect", type=float, default=5.0)
+    parser.add_argument("--max-scratch-area", type=int, default=9000)
+    parser.add_argument("--max-scratch-dim", type=int, default=720)
+    parser.add_argument("--max-scratch-width", type=int, default=48)
     parser.add_argument("--disable-border-glow-suppression", action="store_true")
     parser.add_argument("--debug-artifacts", action="store_true")
 
@@ -147,6 +156,11 @@ def _red_config_from_args(args: argparse.Namespace) -> RedHighlightConfig:
         min_area=int(args.min_red_area),
         max_area=int(args.max_red_area),
         max_dim=int(args.max_red_dim),
+        include_long_scratches=bool(args.include_long_scratches),
+        min_scratch_aspect=float(args.min_scratch_aspect),
+        max_scratch_area=int(args.max_scratch_area),
+        max_scratch_dim=int(args.max_scratch_dim),
+        max_scratch_width=int(args.max_scratch_width),
         suppress_border_glow=not bool(args.disable_border_glow_suppression),
         debug_artifacts=bool(args.debug_artifacts),
     )

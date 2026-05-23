@@ -90,6 +90,28 @@ def _precise_red_boundary_fixture(height: int = 360, width: int = 540) -> tuple[
     return image, target
 
 
+def _long_red_scratch_fixture(height: int = 160, width: int = 260) -> tuple[np.ndarray, np.ndarray]:
+    yy = np.linspace(0.0, 1.0, height, dtype=np.float32)[:, None]
+    xx = np.linspace(0.0, 1.0, width, dtype=np.float32)[None, :]
+    image = np.stack(
+        [
+            6.0 + 3.0 * yy + 2.0 * np.sin(xx * 8.0),
+            3.0 + 1.0 * yy + 0.0 * xx,
+            4.0 + 1.0 * xx + 0.0 * yy,
+        ],
+        axis=2,
+    )
+    grid_y, grid_x = np.indices((height, width))
+    x0 = 42
+    x1 = 205
+    center_y = 78.0 + (grid_x - x0) * 0.10
+    scratch = (grid_x >= x0) & (grid_x <= x1) & (np.abs(grid_y - center_y) <= 2.0)
+    halo = (grid_x >= x0) & (grid_x <= x1) & (np.abs(grid_y - center_y) <= 5.0)
+    image[halo] = np.asarray([52.0, 5.0, 6.0], dtype=np.float32)
+    image[scratch] = np.asarray([232.0, 18.0, 22.0], dtype=np.float32)
+    return np.clip(image, 0, 255).astype(np.uint8), scratch
+
+
 def test_red_highlight_detector_marks_local_red_dust_and_suppresses_border_glow() -> None:
     image = _red_highlight_fixture()
     result = detect_red_highlight_mask(
@@ -130,6 +152,47 @@ def test_red_highlight_detector_marks_red_glow_points_on_black_background() -> N
         (390, 430, 160, 205),
     ]:
         assert int(np.count_nonzero(result.preview_mask[y0:y1, x0:x1])) > 30
+
+
+def test_long_red_scratch_is_rejected_by_default_size_limits() -> None:
+    image, target = _long_red_scratch_fixture()
+    result = detect_red_highlight_mask(
+        image,
+        RedHighlightConfig(
+            detection_long_edge=260,
+            local_radius=4,
+            max_area=420,
+            max_dim=70,
+        ),
+    )
+
+    assert result.manifest["component_count"] == 0
+    assert result.manifest["reject_counts"]["area_or_dim_max"] >= 1
+    assert int(np.count_nonzero((result.preview_mask > 0) & target)) == 0
+
+
+def test_long_red_scratch_mode_keeps_thin_elongated_components() -> None:
+    image, target = _long_red_scratch_fixture()
+    result = detect_red_highlight_mask(
+        image,
+        RedHighlightConfig(
+            detection_long_edge=260,
+            local_radius=4,
+            max_area=420,
+            max_dim=70,
+            include_long_scratches=True,
+            min_scratch_aspect=5.0,
+            max_scratch_area=2400,
+            max_scratch_dim=190,
+            max_scratch_width=32,
+        ),
+    )
+    mask = result.preview_mask > 0
+
+    assert result.manifest["component_count"] == 1
+    assert result.manifest["components"][0]["elongated_scratch"] is True
+    assert int(np.count_nonzero(mask & target)) / int(np.count_nonzero(target)) > 0.80
+    assert int(np.count_nonzero(mask)) < 1400
 
 
 def test_tight_mask_edge_stays_closer_to_red_boundary_than_wide() -> None:

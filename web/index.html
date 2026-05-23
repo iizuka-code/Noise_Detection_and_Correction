@@ -77,6 +77,11 @@
     input[type="range"] {
       accent-color: var(--accent);
     }
+    input[type="checkbox"] {
+      width: auto;
+      margin-right: 8px;
+      accent-color: var(--accent);
+    }
     .grid2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -352,6 +357,32 @@
             <div class="field">
               <label for="threshold_sensitivity">red sensitivity</label>
               <input id="threshold_sensitivity" name="threshold_sensitivity" type="number" min="0.35" step="0.05" value="1.0">
+            </div>
+          </div>
+          <div class="field">
+            <label>
+              <input id="include_long_scratches" name="include_long_scratches" type="checkbox">
+              include long scratches
+            </label>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="min_scratch_aspect">min scratch aspect</label>
+              <input id="min_scratch_aspect" name="min_scratch_aspect" type="number" min="1" step="0.25" value="5.0">
+            </div>
+            <div class="field">
+              <label for="max_scratch_width">max scratch width</label>
+              <input id="max_scratch_width" name="max_scratch_width" type="number" min="1" step="1" value="48">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="max_scratch_area">max scratch area</label>
+              <input id="max_scratch_area" name="max_scratch_area" type="number" min="1" step="1" value="9000">
+            </div>
+            <div class="field">
+              <label for="max_scratch_dim">max scratch dim</label>
+              <input id="max_scratch_dim" name="max_scratch_dim" type="number" min="1" step="1" value="720">
             </div>
           </div>
         </div>

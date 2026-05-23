@@ -9,6 +9,7 @@
 - 2026-05-23: `NLP_davinci` の `red_highlight_v1` を基に、赤照明検査画像から白黒マスクを生成する最小検出コアとCLIを追加。
 - 2026-05-23: ローカルHTMLテストUIに赤照明画像モードを追加し、`/api/repair-red` でマスク生成から補修まで実行できるようにした。
 - 2026-05-23: 実画像に近い小型合成fixtureで、赤照明検出、端グロー抑制、生成マスク補修、マスク外不変性の統合回帰テストを追加。
+- 2026-05-23: 明示オプション `include_long_scratches` による細長い赤スクラッチ検出を追加。通常モードでは従来通り大きい/長い成分を除外する。
 
 ## 1. このリポジトリの位置づけ
 
@@ -186,6 +187,21 @@ dust-mask-repair-red --image normal_scan.png --red-image red_lit_scan.png --outp
 
 `--image` と `--red-image` は同一寸法である必要があります。自動位置合わせ、回転、クロップ合わせ、RAW decode は未実装です。
 
+長い赤スクラッチは誤検出リスクが違うため、既定では従来通り除外されます。検出する場合は明示的に有効化します。
+
+```powershell
+dust-mask-detect-red `
+  --source red_lit_scan.png `
+  --output-dir red_mask_output `
+  --include-long-scratches `
+  --min-scratch-aspect 5.0 `
+  --max-scratch-width 48 `
+  --max-scratch-dim 720 `
+  --max-scratch-area 9000
+```
+
+`dust-mask-repair-red` でも同じ赤検出オプションを指定できます。
+
 ## 6.2 ローカルHTMLテストUI
 
 `src/dust_mask_repair/server.py` と `web/index.html` を追加しています。
@@ -210,6 +226,8 @@ HTML UIでは、入力モードを選択できます。
 
 実行後はbefore/afterをスライダー比較し、mask、diff、metricsも同じ画面で確認できます。赤照明モードでは、画面上のmask表示に生成済み白黒マスクを使います。出力は `web_outputs/<run_id>/` に保存されます。
 
+赤照明モードでは `include long scratches` を有効にすると、細長い赤スクラッチ用の別上限（aspect、width、dim、area）を使って検出します。既定ではOFFです。
+
 ## 7. ライブラリAPI
 
 公開APIは `src/dust_mask_repair/__init__.py` で次をexportしています。
@@ -224,7 +242,7 @@ from dust_mask_repair import RepairConfig, RepairResult, repair_image
 from dust_mask_repair import RedHighlightConfig, detect_red_highlight_mask
 ```
 
-`detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。
+`detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。長い赤スクラッチは `RedHighlightConfig(include_long_scratches=True)` のときだけ、`min_scratch_aspect` / `max_scratch_width` / `max_scratch_dim` / `max_scratch_area` の別上限で保持します。
 
 利用例:
 
@@ -588,7 +606,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは25件あります。
+テストは27件あります。
 
 ### 14.1 `tests/test_mask_loading.py`
 
@@ -647,6 +665,8 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 - 赤照明検査画像から局所的な赤い埃・塵を検出できること。
 - 画像端の広い赤グローを抑制できること。
+- 通常モードでは長い赤スクラッチが従来のサイズ制限で除外されること。
+- `include_long_scratches=True` では細長い赤スクラッチが保持されること。
 - `tight` / `wide` のmask edge modeで境界サイズが変わること。
 - sourceサイズとpreviewサイズが異なる場合も、最終マスクがsource寸法で返ること。
 - CLIの検出出力、manifest、補修連結経路が動くこと。
@@ -674,7 +694,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-25 passed
+27 passed
 ```
 
 構文・ビルド確認:
@@ -715,7 +735,7 @@ Compiling 'src\\dust_mask_repair\\mask.py'...
 
 - `inpaint` は本格的な画像補完ではなく、8近傍平均の局所diffusion fillです。
 - エッジ方向、テクスチャ、粒状性を明示的に推定していません。
-- 大きな傷や長いスクラッチには弱いです。
+- 長いスクラッチ検出は `include_long_scratches` を明示した場合のみ有効です。修復品質は周辺ROIの局所fillに依存するため、広い傷や太い傷はまだ弱いです。
 - `hybrid` の閾値 `area <= 256` は暫定値です。
 - `aggressive` はレビュー用の強補正として追加したため、自然さよりも効きの見えやすさを優先している。
 - 2026-05-22: `aggressive` で白地に黒いシミが出る誤補正を抑えるため、局所統計ベースのguardを追加。補修候補が元画素より周辺統計から遠ざかる場合、または明るくきれいな領域を大きく暗くする場合は元画素を優先する。
@@ -784,7 +804,7 @@ Compiling 'src\\dust_mask_repair\\mask.py'...
 2. palette PNGやinterlaced PNG対応。
 3. メタデータ/ICC保持。
 4. JSON/YAML設定ファイル読み込み。
-5. scratch repair modeを別methodとして追加。
+5. 太い傷や広い傷向けの専用repair methodを追加。
 
 ## 19. 写真反転ソフト本体へ統合するときの注意
 
@@ -847,7 +867,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 25件、pass確認済み。
+- テスト: 27件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。
