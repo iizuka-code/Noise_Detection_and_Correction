@@ -82,6 +82,9 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
     }
+    .hidden {
+      display: none !important;
+    }
     button {
       padding: 11px 14px;
       border: 0;
@@ -241,12 +244,23 @@
     <section class="controls">
       <form id="repairForm">
         <div class="field">
+          <label for="workflow">input mode</label>
+          <select id="workflow" name="workflow">
+            <option value="mask" selected>mask PNG</option>
+            <option value="red">red highlight</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="image">補正を掛けるファイル</label>
           <input id="image" name="image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,image/*" required>
         </div>
-        <div class="field">
+        <div class="field" id="maskField">
           <label for="mask">マスクPNG</label>
           <input id="mask" name="mask" type="file" accept=".png,.tif,.tiff,image/*" required>
+        </div>
+        <div class="field hidden" id="redField">
+          <label for="red_image">赤照明画像</label>
+          <input id="red_image" name="red_image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,image/*">
         </div>
         <div class="grid2">
           <div class="field">
@@ -304,6 +318,43 @@
           <label for="min_component_area">min component area</label>
           <input id="min_component_area" name="min_component_area" type="number" min="0" step="1" value="1">
         </div>
+        <div id="redOptions" class="hidden">
+          <div class="grid2">
+            <div class="field">
+              <label for="detection_long_edge">detection long edge</label>
+              <input id="detection_long_edge" name="detection_long_edge" type="number" min="1" step="1" value="1280">
+            </div>
+            <div class="field">
+              <label for="mask_edge_mode">red mask edge</label>
+              <select id="mask_edge_mode" name="mask_edge_mode">
+                <option value="normal" selected>normal</option>
+                <option value="tight">tight</option>
+                <option value="wide">wide</option>
+                <option value="legacy">legacy</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="max_red_area">max red area</label>
+              <input id="max_red_area" name="max_red_area" type="number" min="1" step="1" value="1400">
+            </div>
+            <div class="field">
+              <label for="max_red_dim">max red dim</label>
+              <input id="max_red_dim" name="max_red_dim" type="number" min="1" step="1" value="95">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="min_red_area">min red area</label>
+              <input id="min_red_area" name="min_red_area" type="number" min="0" step="1" value="1">
+            </div>
+            <div class="field">
+              <label for="threshold_sensitivity">red sensitivity</label>
+              <input id="threshold_sensitivity" name="threshold_sensitivity" type="number" min="0.35" step="0.05" value="1.0">
+            </div>
+          </div>
+        </div>
         <button id="runButton" type="submit">実行</button>
         <p id="status" class="status"></p>
       </form>
@@ -335,6 +386,12 @@
 
   <script>
     const form = document.getElementById("repairForm");
+    const workflow = document.getElementById("workflow");
+    const maskField = document.getElementById("maskField");
+    const redField = document.getElementById("redField");
+    const redOptions = document.getElementById("redOptions");
+    const maskInput = document.getElementById("mask");
+    const redInput = document.getElementById("red_image");
     const statusEl = document.getElementById("status");
     const button = document.getElementById("runButton");
     const compare = document.getElementById("compare");
@@ -343,6 +400,9 @@
     const diffPreview = document.getElementById("diffPreview");
     const metricsEl = document.getElementById("metrics");
 
+    workflow.addEventListener("change", syncWorkflow);
+    syncWorkflow();
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       statusEl.classList.remove("error");
@@ -350,7 +410,8 @@
       button.disabled = true;
       try {
         const data = new FormData(form);
-        const response = await fetch("/api/repair", { method: "POST", body: data });
+        const endpoint = workflow.value === "red" ? "/api/repair-red" : "/api/repair";
+        const response = await fetch(endpoint, { method: "POST", body: data });
         const payload = await response.json();
         if (!response.ok || !payload.ok) {
           throw new Error(payload.error || "repair failed");
@@ -380,9 +441,21 @@
         <div class="compare-badge before">補正前</div>
         <div class="divider"></div>
       `;
-      maskPreview.src = `${payload.mask_url}${cache}`;
+      maskPreview.src = `${payload.generated_mask_url || payload.mask_url}${cache}`;
       diffPreview.src = `${payload.diff_url}${cache}`;
       metricsEl.textContent = JSON.stringify(payload.metrics, null, 2);
+    }
+
+    function syncWorkflow() {
+      const useRed = workflow.value === "red";
+      maskField.classList.toggle("hidden", useRed);
+      redField.classList.toggle("hidden", !useRed);
+      redOptions.classList.toggle("hidden", !useRed);
+      maskInput.required = !useRed;
+      redInput.required = useRed;
+      if (!useRed) {
+        redInput.value = "";
+      }
     }
   </script>
 </body>

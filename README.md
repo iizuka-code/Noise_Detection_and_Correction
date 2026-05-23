@@ -90,7 +90,12 @@ Run a local server and open the printed URL:
 py -3.12 -m dust_mask_repair.server --host 127.0.0.1 --port 8765
 ```
 
-The HTML UI lets you select the image file and mask file, run repair, inspect mask/diff/metrics, and compare before/after with a slider. Outputs are written under `web_outputs/`.
+The HTML UI has two input modes:
+
+- `mask PNG`: select the normal image and an existing same-size mask image, then run repair.
+- `red highlight`: select the normal image and a same-size red-lit inspection image. The server generates a black/white mask first, then runs repair from that generated mask.
+
+After a run, the UI shows before/after comparison, mask, diff, and metrics. Outputs are written under `web_outputs/`.
 
 For testing the artifact guard that prevents dark stains on clean bright regions, open:
 

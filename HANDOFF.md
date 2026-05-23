@@ -7,6 +7,7 @@
 
 - 2026-05-21: 強補正用 `aggressive` method、JPEG入力対応、ローカルHTMLテストUIを追加。
 - 2026-05-23: `NLP_davinci` の `red_highlight_v1` を基に、赤照明検査画像から白黒マスクを生成する最小検出コアとCLIを追加。
+- 2026-05-23: ローカルHTMLテストUIに赤照明画像モードを追加し、`/api/repair-red` でマスク生成から補修まで実行できるようにした。
 
 ## 1. このリポジトリの位置づけ
 
@@ -24,8 +25,8 @@
 ## 2. 現在のリポジトリ状態
 
 - `dust-mask-repair` ディレクトリ内で `git init` 済みです。
-- 初期コミットはまだ作成していません。
-- 実装ファイル、テスト、README、AGENTS、examples、pyproject はすべて未追跡ファイルとして存在します。
+- ベースライン、赤照明検出CLI、赤照明Web UI統合はローカルコミットとして作成済みです。
+- 作業前後は `git status --short` で未コミット差分を確認してください。
 - 既存の親プロジェクト `ConvertCodex` 側の `README.md` や `AGENTS.md` は変更していません。
 - テスト生成物は `test_outputs/` に出ます。`.gitignore` 済みです。
 - 初回のpytest実行時に、この環境の一時ディレクトリ権限問題で `.pytest_tmp/` と `pytest-cache-files-*` が生成されました。これらも `.gitignore` 済みです。削除しようとしましたが、Windows側でアクセス拒否されました。
@@ -116,6 +117,8 @@ py -3.12 -m compileall src
 [project.scripts]
 dust-mask-repair = "dust_mask_repair.cli:main"
 dust-mask-repair-web = "dust_mask_repair.server:main"
+dust-mask-detect-red = "dust_mask_repair.red_highlight_cli:main"
+dust-mask-repair-red = "dust_mask_repair.red_highlight_cli:repair_main"
 ```
 
 実行例:
@@ -197,7 +200,12 @@ py -3.12 -m dust_mask_repair.server --host 127.0.0.1 --port 8765
 http://127.0.0.1:8765/
 ```
 
-HTML UIでは、補正対象ファイルとマスクファイルを選択し、methodやstrengthなどを指定して実行できます。実行後はbefore/afterをスライダー比較し、mask、diff、metricsも同じ画面で確認できます。出力は `web_outputs/<run_id>/` に保存されます。
+HTML UIでは、入力モードを選択できます。
+
+- `mask PNG`: 補正対象ファイルと既存マスクファイルを選択し、従来通り `/api/repair` で補修します。
+- `red highlight`: 補正対象ファイルと同一寸法の赤照明検査画像を選択し、`/api/repair-red` で白黒マスク生成から補修まで実行します。
+
+実行後はbefore/afterをスライダー比較し、mask、diff、metricsも同じ画面で確認できます。赤照明モードでは、画面上のmask表示に生成済み白黒マスクを使います。出力は `web_outputs/<run_id>/` に保存されます。
 
 ## 7. ライブラリAPI
 
@@ -577,7 +585,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは15件あります。
+テストは24件あります。
 
 ### 14.1 `tests/test_mask_loading.py`
 
@@ -643,7 +651,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-15 passed in 0.55s
+24 passed
 ```
 
 構文・ビルド確認:
@@ -816,7 +824,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 15件、pass確認済み。
+- テスト: 24件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。
