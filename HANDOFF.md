@@ -6,6 +6,7 @@
 更新メモ:
 
 - 2026-05-21: 強補正用 `aggressive` method、JPEG入力対応、ローカルHTMLテストUIを追加。
+- 2026-05-23: `NLP_davinci` の `red_highlight_v1` を基に、赤照明検査画像から白黒マスクを生成する最小検出コアとCLIを追加。
 
 ## 1. このリポジトリの位置づけ
 
@@ -50,12 +51,15 @@ dust-mask-repair/
       io.py
       mask.py
       metrics.py
+      red_highlight.py
+      red_highlight_cli.py
       repair.py
       server.py
   tests/
     test_cli.py
     test_invariance.py
     test_mask_loading.py
+    test_red_highlight.py
     test_repair.py
 ```
 
@@ -149,7 +153,34 @@ CLI引数:
 
 CLIは処理後に `metrics` をJSONとして標準出力します。
 
-## 6.1 ローカルHTMLテストUI
+### 6.1 赤ハイライト検出CLI
+
+赤照明検査画像から白黒マスクを作るCLIを追加しています。
+
+```powershell
+dust-mask-detect-red --source red_lit_scan.png --output-dir red_mask_output
+```
+
+出力:
+
+- `mask.png`
+- `<stem>_red_highlight_mask.png`
+- `input_preview.png`
+- `preview_mask.png`
+- `overlay_preview.png`
+- `overlay.png`
+- `component_features.json`
+- `manifest.json`
+
+赤照明マスク生成と補修を続けて行うCLI:
+
+```powershell
+dust-mask-repair-red --image normal_scan.png --red-image red_lit_scan.png --output repaired.png
+```
+
+`--image` と `--red-image` は同一寸法である必要があります。自動位置合わせ、回転、クロップ合わせ、RAW decode は未実装です。
+
+## 6.2 ローカルHTMLテストUI
 
 `src/dust_mask_repair/server.py` と `web/index.html` を追加しています。
 
@@ -175,6 +206,14 @@ HTML UIでは、補正対象ファイルとマスクファイルを選択し、m
 ```python
 from dust_mask_repair import RepairConfig, RepairResult, repair_image
 ```
+
+赤照明検査画像からマスクを作る追加APIもexportしています。
+
+```python
+from dust_mask_repair import RedHighlightConfig, detect_red_highlight_mask
+```
+
+`detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。
 
 利用例:
 

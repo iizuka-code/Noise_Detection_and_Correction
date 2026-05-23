@@ -2,7 +2,9 @@
 
 Mask-guided dust and spot repair for film scan images.
 
-This is a standalone Python library and CLI for repairing only the pixels indicated by a dust mask PNG. It is intended for workflows where dust has already been detected by a separate laser-lit capture and exported as a mask. It is not a tool that detects dust from the normal photo scan.
+This is a standalone Python library and CLI for repairing only the pixels indicated by a dust mask PNG. It is intended for workflows where dust has already been detected by a separate laser-lit capture and exported as a mask. The repair engine still does not detect dust from the normal photo scan.
+
+An optional red-highlight detector is included for workflows where a separate red-lit inspection capture makes dust, debris, or short scratches appear as bright red marks. That detector writes a black/white mask PNG that can be used by the repair engine.
 
 ## Purpose
 
@@ -36,6 +38,8 @@ py -3.12 -m pip install -e .[tiff]
 
 ## CLI
 
+Repair from an existing mask:
+
 ```powershell
 dust-mask-repair `
   --image input.png `
@@ -50,6 +54,33 @@ dust-mask-repair `
   --max-component-area 5000 `
   --debug-dir debug_output
 ```
+
+Detect a mask from a red-highlight inspection image:
+
+```powershell
+dust-mask-detect-red `
+  --source red_lit_scan.png `
+  --output-dir red_mask_output `
+  --detection-long-edge 1920 `
+  --mask-edge-mode normal `
+  --max-red-area 1400 `
+  --max-red-dim 95
+```
+
+This writes `mask.png`, `<stem>_red_highlight_mask.png`, `preview_mask.png`, `overlay_preview.png`, `overlay.png`, `component_features.json`, and `manifest.json`.
+
+Detect a red-highlight mask and immediately repair the normal scan:
+
+```powershell
+dust-mask-repair-red `
+  --image normal_scan.png `
+  --red-image red_lit_scan.png `
+  --output repaired.png `
+  --mask-output generated_mask.png `
+  --method hybrid
+```
+
+`--image` and `--red-image` must already have matching dimensions. Automatic registration, rotation, crop matching, and perspective alignment are not implemented.
 
 ## Local HTML Test UI
 
@@ -78,7 +109,10 @@ Supported methods:
 ## Python API
 
 ```python
-from dust_mask_repair import RepairConfig, repair_image
+from dust_mask_repair import RedHighlightConfig, RepairConfig, detect_red_highlight_mask, repair_image
+
+mask_result = detect_red_highlight_mask(red_lit_image, RedHighlightConfig())
+mask = mask_result.mask
 
 config = RepairConfig(
     method="hybrid",
@@ -156,13 +190,15 @@ ICC profiles and most metadata are not preserved in this MVP. The output is pixe
 
 ## Known Limits
 
-- Dust detection is out of scope. A mask PNG must already exist.
+- Normal-scan dust detection is out of scope. The repair engine requires a mask PNG or a separate red-highlight inspection image.
+- Red-highlight detection currently supports rendered RGB inputs such as PNG, JPEG, and TIFF. RAW decode is not part of this repository.
 - No automatic image/mask registration.
 - No default resizing when dimensions differ.
 - No global denoise, blur, sharpening, or color correction.
 - No generative AI, diffusion model, GAN, or large ML inpainting model.
 - The built-in `inpaint` method is a deterministic local fill, not OpenCV Telea/Navier-Stokes.
 - Large scratches may need a separate scratch-oriented mode later; large components are excluded by default with `--max-component-area`.
+- The red-highlight detector is tuned for red illuminated dust, debris, and short defects. Long scratches may require a dedicated elongated-defect mode.
 
 ## Future Integration Notes
 

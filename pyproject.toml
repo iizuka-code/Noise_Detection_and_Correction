@@ -28,6 +28,8 @@ tiff = [
 [project.scripts]
 dust-mask-repair = "dust_mask_repair.cli:main"
 dust-mask-repair-web = "dust_mask_repair.server:main"
+dust-mask-detect-red = "dust_mask_repair.red_highlight_cli:main"
+dust-mask-repair-red = "dust_mask_repair.red_highlight_cli:repair_main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
