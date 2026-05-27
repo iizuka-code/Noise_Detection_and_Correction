@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-REPAIR_METHODS = ("median", "inpaint", "denoise", "hybrid", "aggressive")
+REPAIR_METHODS = ("median", "inpaint", "denoise", "hybrid", "aggressive", "wide_scratch")
 MASK_CHANNELS = ("auto", "grayscale", "alpha", "red", "max_rgb")
 
 

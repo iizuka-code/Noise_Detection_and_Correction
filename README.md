@@ -137,6 +137,7 @@ Supported methods:
 - `denoise`: applies a small local blur only to masked pixels.
 - `hybrid`: uses diffusion fill for small regions, median for larger kept regions, then a very light masked smoothing pass.
 - `aggressive`: stronger masked replacement for review/testing. It combines diffusion fill, surrounding-ring median replacement, repeated masked smoothing, and a local artifact guard that rejects changes likely to create dark stains on already-clean bright areas.
+- `wide_scratch`: fills broad scratch-like regions by interpolating across the narrow axis of each masked span, then lightly smooths only inside the mask. Use this for long or wide scratches after enabling scratch detection.
 
 ## Python API
 

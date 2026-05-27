@@ -13,6 +13,7 @@
 - 2026-05-23: `dust-mask-benchmark` を追加し、赤照明検出からマスク補修までの処理時間・生成マスク画素数・tracemallocピークをJSONで記録できるようにした。
 - 2026-05-23: 補修時のデバッグ画像生成を `debug_dir` または `collect_debug_images=True` の時だけに変更し、通常処理とベンチマーク時のメモリ/時間を削減。
 - 2026-05-27: 本体統合用に `repair_image_from_red_highlight()` を追加。decode済みRGB/RGBA配列と赤照明RGB配列を渡すだけで、白黒マスク生成から補修まで実行できる。
+- 2026-05-27: 太い傷・広い傷向けに `wide_scratch` methodを追加。マスク成分の向きから狭い軸を選び、左右または上下の文脈をspan単位で補間してからマスク内だけ軽く平滑化する。
 
 ## 1. このリポジトリの位置づけ
 
@@ -155,7 +156,7 @@ CLI引数:
 - `--image`: 必須。入力RGB/RGBA PNG/TIFF。
 - `--mask`: 必須。埃マスク。ヘルプ上はPNG前提だが、実装上は `read_image()` 経由なのでTIFFも読める可能性がある。ただしマスク仕様としてはPNGを前提に扱う。
 - `--output`: 必須。出力PNG/TIFF。
-- `--method`: `median`, `inpaint`, `denoise`, `hybrid`, `aggressive`。既定値は `hybrid`。
+- `--method`: `median`, `inpaint`, `denoise`, `hybrid`, `aggressive`, `wide_scratch`。既定値は `hybrid`。
 - `--mask-channel`: `auto`, `grayscale`, `alpha`, `red`, `max_rgb`。既定値は `auto`。
 - `--threshold`: float。既定値 `0.5`。
 - `--dilate-radius`: int。既定値 `2`。
@@ -342,7 +343,7 @@ collect_debug_images: bool = False
 
 `validate()` で以下をチェックします。
 
-- `method` は `median`, `inpaint`, `denoise`, `hybrid`, `aggressive` のいずれか。
+- `method` は `median`, `inpaint`, `denoise`, `hybrid`, `aggressive`, `wide_scratch` のいずれか。
 - `mask_channel` は `auto`, `grayscale`, `alpha`, `red`, `max_rgb` のいずれか。
 - `threshold` は `0.0..1.0`。
 - `dilate_radius` と `feather_radius` は0以上。
@@ -466,6 +467,16 @@ debug_paths: dict[str, str]
 - 各平滑化後にcontext画素を元ROIで戻すため、ROI内のマスク外画素も保護される。
 - 最終合成でも `soft_mask * strength` の範囲外は元画像で強制復元する。
 - 白黒マスクの効果確認、レビュー、強めの埃消しに使う想定。
+
+### 9.6 `wide_scratch`
+
+関数: `_wide_scratch_repair()`
+
+- 太い傷・広い傷向けの局所補修method。
+- マスク成分のbboxから向きを推定し、縦長なら左右、横長なら上下のcontextをspan単位で線形補間する。
+- 同じ行または列に両側contextがない場合は片側context、それもない場合はdiffusion fallbackを使う。
+- 補間後、マスク内だけ半径1のbox blurを20%混ぜ、ROI内のcontext画素は元ROIに戻す。
+- 画像全体へのblurではなく、最終合成も従来通り `soft_mask * strength` で制限する。
 
 ## 10. マスク処理の詳細
 
@@ -665,7 +676,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは32件あります。
+テストは36件あります。
 
 ### 14.1 `tests/test_benchmark.py`
 
@@ -726,6 +737,14 @@ outside/insideの判定は `soft_mask > 0.0` です。
    - JPEG入力を読み込めること。
 16. `test_debug_images_are_opt_in_without_debug_dir`
    - `debug_dir` なしの通常補修では `debug_images` を作らず、`collect_debug_images=True` でのみ保持すること。
+17. `test_wide_scratch_empty_mask_returns_exact_input`
+   - `wide_scratch` methodでも空マスクなら完全一致すること。
+18. `test_wide_scratch_strength_zero_returns_exact_input`
+   - `wide_scratch` methodでも `strength=0.0` なら完全一致すること。
+19. `test_wide_scratch_repairs_broad_vertical_defect_with_gradient_context`
+   - 太い縦傷で左右contextから階調を復元し、soft mask外が完全一致すること。
+20. `test_wide_scratch_preserves_uint16_for_horizontal_defect`
+   - 横方向の広い傷でも `uint16` を維持し、soft mask外が完全一致すること。
 
 ### 14.6 `tests/test_red_highlight.py`
 
@@ -765,7 +784,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-32 passed
+36 passed
 ```
 
 構文・ビルド確認:
@@ -826,7 +845,7 @@ max_abs_diff_outside_mask_max: 0.0
 
 - `inpaint` は本格的な画像補完ではなく、8近傍平均の局所diffusion fillです。
 - エッジ方向、テクスチャ、粒状性を明示的に推定していません。
-- 長いスクラッチ検出は `include_long_scratches` を明示した場合のみ有効です。修復品質は周辺ROIの局所fillに依存するため、広い傷や太い傷はまだ弱いです。
+- 長いスクラッチ検出は `include_long_scratches` を明示した場合のみ有効です。補修側は `wide_scratch` methodを追加済みですが、あくまで局所的なspan補間であり、複雑なテクスチャや構造の再生成はしません。
 - `hybrid` の閾値 `area <= 256` は暫定値です。
 - `aggressive` はレビュー用の強補正として追加したため、自然さよりも効きの見えやすさを優先している。
 - 2026-05-22: `aggressive` で白地に黒いシミが出る誤補正を抑えるため、局所統計ベースのguardを追加。補修候補が元画素より周辺統計から遠ざかる場合、または明るくきれいな領域を大きく暗くする場合は元画素を優先する。
@@ -893,7 +912,7 @@ max_abs_diff_outside_mask_max: 0.0
 2. palette PNGやinterlaced PNG対応。
 3. メタデータ/ICC保持。
 4. JSON/YAML設定ファイル読み込み。
-5. 太い傷や広い傷向けの専用repair methodを追加。
+5. 複雑な背景向けに、edge-awareな `wide_scratch` 改良またはoptional OpenCV経路を検討。
 
 ## 19. 写真反転ソフト本体へ統合するときの注意
 
@@ -958,7 +977,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 32件、pass確認済み。
+- テスト: 36件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。

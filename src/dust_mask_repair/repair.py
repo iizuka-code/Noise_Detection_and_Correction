@@ -141,6 +141,8 @@ def _repair_roi(roi: np.ndarray, mask: np.ndarray, method: str, area: int) -> np
         repaired = out
     elif method == "aggressive":
         repaired = _aggressive_repair(roi, mask)
+    elif method == "wide_scratch":
+        repaired = _wide_scratch_repair(roi, mask)
     else:
         raise ValueError(f"Unsupported repair method: {method}")
     return _guard_repair_candidate(roi, repaired, mask)
@@ -216,6 +218,100 @@ def _aggressive_repair(roi: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
+def _wide_scratch_repair(roi: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    if not mask.any():
+        return roi.copy()
+    context = ~mask
+    if not context.any():
+        return roi.copy()
+
+    ys, xs = np.nonzero(mask)
+    width = int(xs.max() - xs.min() + 1)
+    height = int(ys.max() - ys.min() + 1)
+    primary_axis = 1 if height >= width else 0
+    secondary_axis = 0 if primary_axis == 1 else 1
+
+    primary, primary_filled = _directional_span_fill(roi, mask, primary_axis)
+    secondary, secondary_filled = _directional_span_fill(roi, mask, secondary_axis)
+
+    unfilled = mask & ~primary_filled & ~secondary_filled
+    out = _diffusion_inpaint(roi, mask) if unfilled.any() else roi.copy()
+    secondary_only = secondary_filled & ~primary_filled
+    out[secondary_only] = secondary[secondary_only]
+    out[primary_filled] = primary[primary_filled]
+
+    smoothed = _box_blur_image(out, radius=1)
+    out[mask] = (out[mask] * 0.8) + (smoothed[mask] * 0.2)
+    out[context] = roi[context]
+    return out
+
+
+def _directional_span_fill(roi: np.ndarray, mask: np.ndarray, axis: int) -> tuple[np.ndarray, np.ndarray]:
+    out = roi.copy()
+    filled = np.zeros(mask.shape, dtype=bool)
+    if axis == 1:
+        for y in range(mask.shape[0]):
+            _fill_line_between_context(
+                values=roi[y, :, :],
+                line_mask=mask[y, :],
+                write_values=out[y, :, :],
+                write_filled=filled[y, :],
+            )
+    else:
+        for x in range(mask.shape[1]):
+            _fill_line_between_context(
+                values=roi[:, x, :],
+                line_mask=mask[:, x],
+                write_values=out[:, x, :],
+                write_filled=filled[:, x],
+            )
+    return out, filled
+
+
+def _fill_line_between_context(
+    values: np.ndarray,
+    line_mask: np.ndarray,
+    write_values: np.ndarray,
+    write_filled: np.ndarray,
+) -> None:
+    size = line_mask.shape[0]
+    index = 0
+    while index < size:
+        if not line_mask[index]:
+            index += 1
+            continue
+
+        start = index
+        while index < size and line_mask[index]:
+            index += 1
+        end = index
+
+        left = _nearest_unmasked_index(line_mask, start - 1, -1)
+        right = _nearest_unmasked_index(line_mask, end, 1)
+        if left is None and right is None:
+            continue
+
+        if left is not None and right is not None:
+            span = np.arange(start, end, dtype=np.float32)
+            denom = float(right - left)
+            weights = ((span - float(left)) / denom).reshape(-1, 1)
+            write_values[start:end] = values[left] * (1.0 - weights) + values[right] * weights
+        elif left is not None:
+            write_values[start:end] = values[left]
+        else:
+            write_values[start:end] = values[right]
+        write_filled[start:end] = True
+
+
+def _nearest_unmasked_index(mask: np.ndarray, start: int, step: int) -> int | None:
+    index = start
+    while 0 <= index < mask.shape[0]:
+        if not mask[index]:
+            return int(index)
+        index += step
+    return None
+
+
 def _guard_repair_candidate(roi: np.ndarray, candidate: np.ndarray, mask: np.ndarray) -> np.ndarray:
     if not mask.any():
         return candidate
@@ -228,6 +324,11 @@ def _guard_repair_candidate(roi: np.ndarray, candidate: np.ndarray, mask: np.nda
     context_median = np.median(sample, axis=0)
     context_mad = np.median(np.abs(sample - context_median), axis=0)
     tolerance = max(0.025, float(np.max(context_mad)) * 3.0)
+    context_luma = float(
+        context_median[0] * 0.2126
+        + context_median[1] * 0.7152
+        + context_median[2] * 0.0722
+    )
 
     original_distance = np.max(np.abs(roi - context_median), axis=2)
     candidate_distance = np.max(np.abs(candidate - context_median), axis=2)
@@ -235,11 +336,10 @@ def _guard_repair_candidate(roi: np.ndarray, candidate: np.ndarray, mask: np.nda
 
     original_luma = _luminance(roi)
     candidate_luma = _luminance(candidate)
-    local_luma = _luminance(_box_blur_image(roi, radius=2))
     darkens_clean_bright_area = (
         mask
-        & (original_luma > 0.78)
-        & (local_luma > 0.68)
+        & (context_luma > 0.68)
+        & (np.abs(original_luma - context_luma) < 0.08)
         & (candidate_luma < original_luma - 0.08)
     )
 
