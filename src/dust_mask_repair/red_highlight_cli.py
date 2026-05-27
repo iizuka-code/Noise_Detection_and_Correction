@@ -6,8 +6,9 @@ from pathlib import Path
 
 from .config import MASK_CHANNELS, REPAIR_METHODS, RepairConfig
 from .io import read_image, write_image
-from .red_highlight import RedHighlightConfig, detect_red_highlight_source_image, run_red_highlight_detector
+from .red_highlight import RedHighlightConfig, run_red_highlight_detector
 from .repair import repair_image
+from .workflow import repair_image_from_red_highlight
 
 
 def build_detect_parser() -> argparse.ArgumentParser:
@@ -58,28 +59,6 @@ def repair_main(argv: list[str] | None = None) -> int:
     red_config = _red_config_from_args(args)
     normal_image = read_image(args.image)
     red_image = read_image(args.red_image)
-
-    if normal_image.pixels.shape[:2] != red_image.pixels.shape[:2]:
-        raise ValueError(
-            "image and red-image dimensions differ: "
-            f"image={normal_image.pixels.shape[1]}x{normal_image.pixels.shape[0]}, "
-            f"red_image={red_image.pixels.shape[1]}x{red_image.pixels.shape[0]}"
-        )
-
-    if args.red_debug_dir:
-        red_manifest = run_red_highlight_detector(Path(args.red_image), Path(args.red_debug_dir), red_config)
-        mask_path = Path(red_manifest["artifacts"]["mask"])
-        mask = read_image(mask_path).pixels
-    else:
-        red_result = detect_red_highlight_source_image(red_image.pixels, red_config)
-        mask = red_result.mask
-        mask_path = Path(args.mask_output) if args.mask_output else Path(args.output).with_name(Path(args.output).stem + "_red_mask.png")
-        write_image(mask_path, mask)
-        red_manifest = red_result.manifest
-
-    if args.mask_output and not Path(args.mask_output).exists():
-        write_image(Path(args.mask_output), mask)
-
     repair_config = RepairConfig(
         method=args.method,
         mask_channel=args.mask_channel,
@@ -92,7 +71,34 @@ def repair_main(argv: list[str] | None = None) -> int:
         padding=args.padding,
         debug_dir=args.repair_debug_dir,
     )
-    repair_result = repair_image(normal_image.pixels, mask, repair_config)
+    if normal_image.pixels.shape[:2] != red_image.pixels.shape[:2]:
+        raise ValueError(
+            "image and red-image dimensions differ: "
+            f"image={normal_image.pixels.shape[1]}x{normal_image.pixels.shape[0]}, "
+            f"red_image={red_image.pixels.shape[1]}x{red_image.pixels.shape[0]}"
+        )
+
+    if args.red_debug_dir:
+        red_manifest = run_red_highlight_detector(Path(args.red_image), Path(args.red_debug_dir), red_config)
+        mask_path = Path(red_manifest["artifacts"]["mask"])
+        mask = read_image(mask_path).pixels
+        repair_result = repair_image(normal_image.pixels, mask, repair_config)
+    else:
+        workflow_result = repair_image_from_red_highlight(
+            normal_image.pixels,
+            red_image.pixels,
+            red_config=red_config,
+            repair_config=repair_config,
+        )
+        mask = workflow_result.generated_mask
+        mask_path = Path(args.mask_output) if args.mask_output else Path(args.output).with_name(Path(args.output).stem + "_red_mask.png")
+        write_image(mask_path, mask)
+        red_manifest = workflow_result.red_highlight.manifest
+        repair_result = workflow_result.repair
+
+    if args.mask_output and not Path(args.mask_output).exists():
+        write_image(Path(args.mask_output), mask)
+
     write_image(Path(args.output), repair_result.repaired_image)
     print(
         json.dumps(

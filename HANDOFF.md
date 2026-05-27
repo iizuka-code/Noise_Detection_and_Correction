@@ -12,6 +12,7 @@
 - 2026-05-23: 明示オプション `include_long_scratches` による細長い赤スクラッチ検出を追加。通常モードでは従来通り大きい/長い成分を除外する。
 - 2026-05-23: `dust-mask-benchmark` を追加し、赤照明検出からマスク補修までの処理時間・生成マスク画素数・tracemallocピークをJSONで記録できるようにした。
 - 2026-05-23: 補修時のデバッグ画像生成を `debug_dir` または `collect_debug_images=True` の時だけに変更し、通常処理とベンチマーク時のメモリ/時間を削減。
+- 2026-05-27: 本体統合用に `repair_image_from_red_highlight()` を追加。decode済みRGB/RGBA配列と赤照明RGB配列を渡すだけで、白黒マスク生成から補修まで実行できる。
 
 ## 1. このリポジトリの位置づけ
 
@@ -61,6 +62,7 @@ dust-mask-repair/
       red_highlight_cli.py
       repair.py
       server.py
+      workflow.py
   tests/
     test_benchmark.py
     test_cli.py
@@ -70,6 +72,7 @@ dust-mask-repair/
     test_red_highlight_regression.py
     test_repair.py
     test_server.py
+    test_workflow.py
 ```
 
 ## 4. 依存関係
@@ -273,6 +276,14 @@ from dust_mask_repair import RedHighlightConfig, detect_red_highlight_mask
 
 `detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。長い赤スクラッチは `RedHighlightConfig(include_long_scratches=True)` のときだけ、`min_scratch_aspect` / `max_scratch_width` / `max_scratch_dim` / `max_scratch_area` の別上限で保持します。
 
+本体統合用の連結APIもexportしています。
+
+```python
+from dust_mask_repair import RedHighlightRepairResult, repair_image_from_red_highlight
+```
+
+`repair_image_from_red_highlight(normal_rgb_or_rgba, red_lit_rgb, red_config, repair_config)` は、decode済みの通常画像配列と赤照明画像配列を受け取り、寸法一致を確認した上で、赤照明マスク生成と補修を連続実行します。RAW/DNG decodeはこのリポジトリでは行いません。
+
 利用例:
 
 ```python
@@ -291,6 +302,22 @@ config = RepairConfig(
 )
 
 result = repair_image(image, mask, config)
+```
+
+赤照明画像から直接補修する場合:
+
+```python
+from dust_mask_repair import RedHighlightConfig, RepairConfig, repair_image_from_red_highlight
+
+workflow_result = repair_image_from_red_highlight(
+    normal_rgb_or_rgba,
+    red_lit_rgb,
+    red_config=RedHighlightConfig(),
+    repair_config=RepairConfig(mask_channel="grayscale"),
+)
+
+generated_mask = workflow_result.generated_mask
+repaired = workflow_result.repaired_image
 ```
 
 ### 7.1 `RepairConfig`
@@ -638,7 +665,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは30件あります。
+テストは32件あります。
 
 ### 14.1 `tests/test_benchmark.py`
 
@@ -722,6 +749,11 @@ outside/insideの判定は `soft_mask > 0.0` です。
 - `/api/repair-red` が通常画像と赤照明画像を受け取り、生成マスクと補修画像URLを返すこと。
 - 通常画像と赤照明画像の寸法が異なる場合、400エラーで明示的に拒否すること。
 
+### 14.9 `tests/test_workflow.py`
+
+- `repair_image_from_red_highlight()` がdecode済みRGB配列を受け取り、赤照明マスク生成から補修まで返すこと。
+- 通常画像と赤照明画像の寸法が異なる場合、明示的な `ValueError` を返すこと。
+
 ## 15. 最終検証結果
 
 直近の確認結果:
@@ -733,7 +765,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-30 passed
+32 passed
 ```
 
 構文・ビルド確認:
@@ -867,6 +899,8 @@ max_abs_diff_outside_mask_max: 0.0
 
 統合時に必ず確認すること:
 
+- 本体側でRAW/DNGをdecodeし、このリポジトリにはdecode済みRGB/RGBA配列を渡す。
+- 赤照明画像との連結は `repair_image_from_red_highlight()` を基本入口にする。
 - 通常スキャン画像と埃マスクに同じ幾何変換を適用する。
 - crop、rotate、resize、perspective補正後にマスク座標がずれないか確認する。
 - 補修を「反転前RGB」に入れるか「反転後RGB」に入れるか比較する。
@@ -924,7 +958,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 30件、pass確認済み。
+- テスト: 32件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。

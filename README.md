@@ -141,7 +141,13 @@ Supported methods:
 ## Python API
 
 ```python
-from dust_mask_repair import RedHighlightConfig, RepairConfig, detect_red_highlight_mask, repair_image
+from dust_mask_repair import (
+    RedHighlightConfig,
+    RepairConfig,
+    detect_red_highlight_mask,
+    repair_image,
+    repair_image_from_red_highlight,
+)
 
 mask_result = detect_red_highlight_mask(red_lit_image, RedHighlightConfig())
 mask = mask_result.mask
@@ -164,7 +170,18 @@ repaired = result.repaired_image
 binary_mask = result.binary_mask
 soft_mask = result.soft_mask
 metrics = result.metrics
+
+workflow_result = repair_image_from_red_highlight(
+    normal_rgb_or_rgba,
+    red_lit_rgb,
+    red_config=RedHighlightConfig(),
+    repair_config=RepairConfig(mask_channel="grayscale"),
+)
+generated_mask = workflow_result.generated_mask
+repaired_from_red = workflow_result.repaired_image
 ```
+
+`repair_image_from_red_highlight()` is the intended integration point for a host application that already decoded RAW/DNG into an RGB/RGBA working buffer. This repository still does not decode RAW directly.
 
 `RepairResult` includes:
 
@@ -238,6 +255,7 @@ ICC profiles and most metadata are not preserved in this MVP. The output is pixe
 
 When integrating with the film negative converter:
 
+- pass decoded RGB/RGBA arrays into `repair_image_from_red_highlight()` rather than adding RAW decode to this repository;
 - apply identical geometric transforms to the image and mask;
 - crop, rotation, and resize can shift mask coordinates;
 - compare applying repair to the scan-stage RGB image versus the inverted RGB image;

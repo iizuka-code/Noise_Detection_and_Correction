@@ -16,8 +16,9 @@ with warnings.catch_warnings():
 
 from .config import MASK_CHANNELS, REPAIR_METHODS, RepairConfig
 from .io import read_image, write_image
-from .red_highlight import RedHighlightConfig, detect_red_highlight_source_image
+from .red_highlight import RedHighlightConfig
 from .repair import repair_image
+from .workflow import repair_image_from_red_highlight
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -156,14 +157,14 @@ class RepairWebHandler(BaseHTTPRequestHandler):
 
         image = read_image(image_path)
         red_image = read_image(red_path)
-        if image.pixels.shape[:2] != red_image.pixels.shape[:2]:
-            raise ValueError(
-                "image and red-image dimensions differ: "
-                f"image={image.pixels.shape[1]}x{image.pixels.shape[0]}, "
-                f"red_image={red_image.pixels.shape[1]}x{red_image.pixels.shape[0]}"
-            )
+        workflow_result = repair_image_from_red_highlight(
+            image.pixels,
+            red_image.pixels,
+            red_config=red_cfg,
+            repair_config=repair_cfg,
+        )
 
-        red_result = detect_red_highlight_source_image(red_image.pixels, red_cfg)
+        red_result = workflow_result.red_highlight
         red_debug_dir.mkdir(parents=True, exist_ok=True)
         red_mask_path = red_debug_dir / "red_highlight_mask.png"
         red_preview_mask_path = red_debug_dir / "preview_mask.png"
@@ -176,7 +177,7 @@ class RepairWebHandler(BaseHTTPRequestHandler):
         write_image(red_overlay_preview_path, red_result.overlay_preview)
         red_manifest_path.write_text(json.dumps(red_result.manifest, indent=2, sort_keys=True), encoding="utf-8")
 
-        result = repair_image(image.pixels, red_result.mask, repair_cfg)
+        result = workflow_result.repair
         output_path = run_dir / "repaired.png"
         write_image(output_path, result.repaired_image)
 
