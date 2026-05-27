@@ -28,6 +28,7 @@ def test_run_benchmark_returns_red_detection_and_repair_summary() -> None:
 
     assert result["benchmark_version"] == BENCHMARK_VERSION
     assert result["image_shape"] == [72, 96]
+    assert result["red_config"]["visual_artifacts"] is False
     assert len(result["runs"]) == 1
     run = result["runs"][0]
     assert run["detect_ms"] >= 0.0

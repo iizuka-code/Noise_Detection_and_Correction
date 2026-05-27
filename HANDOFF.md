@@ -14,6 +14,7 @@
 - 2026-05-23: 補修時のデバッグ画像生成を `debug_dir` または `collect_debug_images=True` の時だけに変更し、通常処理とベンチマーク時のメモリ/時間を削減。
 - 2026-05-27: 本体統合用に `repair_image_from_red_highlight()` を追加。decode済みRGB/RGBA配列と赤照明RGB配列を渡すだけで、白黒マスク生成から補修まで実行できる。
 - 2026-05-27: 太い傷・広い傷向けに `wide_scratch` methodを追加。マスク成分の向きから狭い軸を選び、左右または上下の文脈をspan単位で補間してからマスク内だけ軽く平滑化する。
+- 2026-05-27: `RedHighlightConfig.visual_artifacts` を追加。非デバッグの補修連結やベンチマークではoverlay/score map配列を作らず、検出CLIとWeb UIでは従来通り生成する。
 
 ## 1. このリポジトリの位置づけ
 
@@ -275,7 +276,7 @@ from dust_mask_repair import RepairConfig, RepairResult, repair_image
 from dust_mask_repair import RedHighlightConfig, detect_red_highlight_mask
 ```
 
-`detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。長い赤スクラッチは `RedHighlightConfig(include_long_scratches=True)` のときだけ、`min_scratch_aspect` / `max_scratch_width` / `max_scratch_dim` / `max_scratch_area` の別上限で保持します。
+`detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。長い赤スクラッチは `RedHighlightConfig(include_long_scratches=True)` のときだけ、`min_scratch_aspect` / `max_scratch_width` / `max_scratch_dim` / `max_scratch_area` の別上限で保持します。補修連結やbatch/export用途でoverlayが不要な場合は `RedHighlightConfig(visual_artifacts=False)` を使います。
 
 本体統合用の連結APIもexportしています。
 
@@ -313,7 +314,7 @@ from dust_mask_repair import RedHighlightConfig, RepairConfig, repair_image_from
 workflow_result = repair_image_from_red_highlight(
     normal_rgb_or_rgba,
     red_lit_rgb,
-    red_config=RedHighlightConfig(),
+    red_config=RedHighlightConfig(visual_artifacts=False),
     repair_config=RepairConfig(mask_channel="grayscale"),
 )
 
@@ -373,6 +374,8 @@ debug_paths: dict[str, str]
 `soft_mask` は feather 後のfloat32マスクです。  
 `changed_bbox_list` は `soft_mask > 0.0` の連結成分bboxです。
 `debug_images` は `debug_dir` 指定時、または `collect_debug_images=True` の時だけ生成されます。
+
+赤照明検出側の `overlay_preview` / `overlay` / `score_map` は `RedHighlightConfig.visual_artifacts=True` の時だけ生成します。`run_red_highlight_detector()` とWeb UIは表示・保存用にTrueを使い、`dust-mask-benchmark` と `dust-mask-repair-red` の非デバッグ経路はFalseを使います。
 
 ## 8. 処理パイプライン
 
@@ -676,11 +679,12 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは36件あります。
+テストは38件あります。
 
 ### 14.1 `tests/test_benchmark.py`
 
 - `run_benchmark()` が赤照明検出と補修のsummaryを返すこと。
+- ベンチマーク用の赤照明検出が `visual_artifacts=False` で不要なoverlay/score配列を作らないこと。
 - CLI入口がJSONファイルを書き、`include_long_scratches` 設定を反映すること。
 
 ### 14.2 `tests/test_mask_loading.py`
@@ -753,6 +757,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 - 通常モードでは長い赤スクラッチが従来のサイズ制限で除外されること。
 - `include_long_scratches=True` では細長い赤スクラッチが保持されること。
 - `tight` / `wide` のmask edge modeで境界サイズが変わること。
+- `visual_artifacts=False` でも生成マスクが変わらず、overlay/score map配列を空で返すこと。
 - sourceサイズとpreviewサイズが異なる場合も、最終マスクがsource寸法で返ること。
 - CLIの検出出力、manifest、補修連結経路が動くこと。
 
@@ -771,6 +776,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 ### 14.9 `tests/test_workflow.py`
 
 - `repair_image_from_red_highlight()` がdecode済みRGB配列を受け取り、赤照明マスク生成から補修まで返すこと。
+- `red_config` 未指定時に `visual_artifacts=False` を使い、補修連結で不要なoverlay/score map配列を作らないこと。
 - 通常画像と赤照明画像の寸法が異なる場合、明示的な `ValueError` を返すこと。
 
 ## 15. 最終検証結果
@@ -784,7 +790,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-36 passed
+38 passed
 ```
 
 構文・ビルド確認:
@@ -823,6 +829,25 @@ max_abs_diff_outside_mask_max: 0.0
 
 参考: `debug_images` 常時生成時の同条件では、repair中央値 `694.302 ms`、total中央値 `1826.264 ms`、peak traced memory中央値 `37779788 bytes` でした。今回の変更ではrepair/totalは改善し、peak traced memoryは赤検出側の大きな中間配列が支配しているため横ばいです。
 
+`visual_artifacts=False` 追加時の同条件比較:
+
+```text
+before visual_artifacts skip:
+detect_ms median: 1606.694
+repair_ms median: 899.484
+total_ms median: 2546.758
+peak_traced_memory_bytes median: 37778350
+
+after visual_artifacts skip:
+detect_ms median: 1080.272
+repair_ms median: 665.550
+total_ms median: 1766.076
+peak_traced_memory_bytes median: 35869987
+final_mask_pixels: 4820
+changed_pixel_count: 5857
+max_abs_diff_outside_mask_max: 0.0
+```
+
 ## 16. 品質上の最重要条件
 
 このプロジェクトで最も重要なのは、マスク外画素不変性です。
@@ -860,6 +885,7 @@ max_abs_diff_outside_mask_max: 0.0
 ### 17.3 メモリ
 
 - `debug_images` は必要時のみ作られます。
+- 赤照明検出のvisual artifactsは `visual_artifacts=False` で抑制できます。
 - 大きな16bit画像では `original`, `image_float`, `repair_candidate`, `output_float` が同時に存在します。`debug_dir` または `collect_debug_images=True` を使う場合は、さらにデバッグ配列のメモリが必要です。
 
 ### 17.4 I/O
@@ -920,6 +946,7 @@ max_abs_diff_outside_mask_max: 0.0
 
 - 本体側でRAW/DNGをdecodeし、このリポジトリにはdecode済みRGB/RGBA配列を渡す。
 - 赤照明画像との連結は `repair_image_from_red_highlight()` を基本入口にする。
+- batch/exportなど表示が不要な経路では `RedHighlightConfig(visual_artifacts=False)` を使う。
 - 通常スキャン画像と埃マスクに同じ幾何変換を適用する。
 - crop、rotate、resize、perspective補正後にマスク座標がずれないか確認する。
 - 補修を「反転前RGB」に入れるか「反転後RGB」に入れるか比較する。
@@ -977,7 +1004,7 @@ I/Oを変更する場合:
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 36件、pass確認済み。
+- テスト: 38件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。

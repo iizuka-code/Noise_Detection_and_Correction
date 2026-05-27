@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .config import MASK_CHANNELS, REPAIR_METHODS, RepairConfig
@@ -87,7 +88,7 @@ def repair_main(argv: list[str] | None = None) -> int:
         workflow_result = repair_image_from_red_highlight(
             normal_image.pixels,
             red_image.pixels,
-            red_config=red_config,
+            red_config=replace(red_config, visual_artifacts=False),
             repair_config=repair_config,
         )
         mask = workflow_result.generated_mask

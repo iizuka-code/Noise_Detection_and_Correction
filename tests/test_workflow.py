@@ -41,6 +41,35 @@ def test_repair_image_from_red_highlight_accepts_decoded_rgb_arrays() -> None:
     assert int(np.count_nonzero(result.generated_mask)) > 0
 
 
+def test_repair_image_from_red_highlight_defaults_to_nonvisual_artifacts() -> None:
+    normal = np.zeros((80, 96, 3), dtype=np.uint8)
+    normal[:, :] = [100, 120, 140]
+    normal[35:43, 42:50] = [15, 15, 15]
+    red = np.zeros((80, 96, 3), dtype=np.uint8)
+    red[:, :] = [5, 3, 4]
+    _add_disk(red, 39, 46, 8, (56, 4, 5))
+    _add_disk(red, 39, 46, 5, (232, 18, 24))
+
+    result = repair_image_from_red_highlight(
+        normal,
+        red,
+        repair_config=RepairConfig(
+            method="hybrid",
+            mask_channel="grayscale",
+            threshold=0.5,
+            dilate_radius=0,
+            feather_radius=0,
+            padding=8,
+        ),
+    )
+
+    assert int(np.count_nonzero(result.generated_mask)) > 0
+    assert result.red_highlight.overlay.shape == (0, 0, 3)
+    assert result.red_highlight.overlay_preview.shape == (0, 0, 3)
+    assert result.red_highlight.score_map.shape == (0, 0)
+    assert result.red_highlight.manifest["parameters"]["visual_artifacts"] is False
+
+
 def test_repair_image_from_red_highlight_rejects_mismatched_dimensions() -> None:
     normal = np.zeros((32, 32, 3), dtype=np.uint8)
     red = np.zeros((30, 32, 3), dtype=np.uint8)

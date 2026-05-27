@@ -154,6 +154,33 @@ def test_red_highlight_detector_marks_red_glow_points_on_black_background() -> N
         assert int(np.count_nonzero(result.preview_mask[y0:y1, x0:x1])) > 30
 
 
+def test_red_highlight_detector_can_skip_visual_artifacts_without_changing_mask() -> None:
+    image = _red_highlight_fixture()
+    config = RedHighlightConfig(
+        detection_long_edge=540,
+        local_radius=4,
+        max_area=360,
+        max_dim=42,
+    )
+
+    with_artifacts = detect_red_highlight_mask(image, config)
+    without_artifacts = detect_red_highlight_mask(
+        image,
+        RedHighlightConfig(
+            detection_long_edge=540,
+            local_radius=4,
+            max_area=360,
+            max_dim=42,
+            visual_artifacts=False,
+        ),
+    )
+
+    assert np.array_equal(without_artifacts.preview_mask, with_artifacts.preview_mask)
+    assert without_artifacts.overlay_preview.shape == (0, 0, 3)
+    assert without_artifacts.score_map.shape == (0, 0)
+    assert with_artifacts.overlay_preview.shape == image.shape
+
+
 def test_long_red_scratch_is_rejected_by_default_size_limits() -> None:
     image, target = _long_red_scratch_fixture()
     result = detect_red_highlight_mask(
@@ -342,4 +369,5 @@ def test_red_highlight_cli_writes_mask_manifest_and_combined_repair() -> None:
     repair_payload = json.loads(repair.stdout)
     assert repaired.exists()
     assert Path(repair_payload["generated_mask"]).exists()
+    assert repair_payload["red_highlight"]["parameters"]["visual_artifacts"] is False
     assert repair_payload["repair"]["max_abs_diff_outside_mask"] == 0.0

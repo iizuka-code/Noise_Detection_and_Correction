@@ -153,6 +153,7 @@ class RepairWebHandler(BaseHTTPRequestHandler):
             max_scratch_dim=_form_int(form, "max_scratch_dim", 720),
             max_scratch_width=_form_int(form, "max_scratch_width", 48),
             suppress_border_glow=_form_bool(form, "suppress_border_glow", True),
+            visual_artifacts=True,
         )
 
         image = read_image(image_path)

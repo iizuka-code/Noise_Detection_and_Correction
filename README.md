@@ -175,7 +175,7 @@ metrics = result.metrics
 workflow_result = repair_image_from_red_highlight(
     normal_rgb_or_rgba,
     red_lit_rgb,
-    red_config=RedHighlightConfig(),
+    red_config=RedHighlightConfig(visual_artifacts=False),
     repair_config=RepairConfig(mask_channel="grayscale"),
 )
 generated_mask = workflow_result.generated_mask
@@ -183,6 +183,7 @@ repaired_from_red = workflow_result.repaired_image
 ```
 
 `repair_image_from_red_highlight()` is the intended integration point for a host application that already decoded RAW/DNG into an RGB/RGBA working buffer. This repository still does not decode RAW directly.
+Use `RedHighlightConfig(visual_artifacts=False)` when the caller only needs the generated mask and repaired pixels; the detector then skips overlay and score-map arrays. The standalone detection CLI and Web UI still generate visual artifacts because they write preview files.
 
 `RepairResult` includes:
 
@@ -257,6 +258,7 @@ ICC profiles and most metadata are not preserved in this MVP. The output is pixe
 When integrating with the film negative converter:
 
 - pass decoded RGB/RGBA arrays into `repair_image_from_red_highlight()` rather than adding RAW decode to this repository;
+- set `RedHighlightConfig(visual_artifacts=False)` for non-visual batch or export flows;
 - apply identical geometric transforms to the image and mask;
 - crop, rotation, and resize can shift mask coordinates;
 - compare applying repair to the scan-stage RGB image versus the inverted RGB image;

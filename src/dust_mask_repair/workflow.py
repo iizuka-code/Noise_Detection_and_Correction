@@ -33,7 +33,8 @@ def repair_image_from_red_highlight(
     red = np.asarray(red_image)
     _validate_pair_dimensions(normal, red)
 
-    red_result = detect_red_highlight_source_image(red, red_config or RedHighlightConfig())
+    red_cfg = red_config or RedHighlightConfig(visual_artifacts=False)
+    red_result = detect_red_highlight_source_image(red, red_cfg)
     repair_cfg = repair_config or RepairConfig(mask_channel="grayscale")
     repair_result = repair_image(normal, red_result.mask, repair_cfg)
     return RedHighlightRepairResult(red_highlight=red_result, repair=repair_result)

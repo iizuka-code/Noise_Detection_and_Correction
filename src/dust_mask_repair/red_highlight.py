@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -47,6 +47,7 @@ class RedHighlightConfig:
     border_x_fraction: float = 0.045
     border_y_fraction: float = 0.02
     debug_artifacts: bool = False
+    visual_artifacts: bool = True
 
     def validate(self) -> None:
         if self.detection_long_edge <= 0:
@@ -113,7 +114,7 @@ def detect_red_highlight_source_image(
     refine_started = perf_counter()
     final_mask, final_refine = _final_mask_for_source(source_rgb, detection.preview_mask, cfg)
     final_refine_ms = _elapsed_ms(refine_started)
-    overlay = _overlay_mask(source_rgb, final_mask > 0)
+    overlay = _overlay_mask(source_rgb, final_mask > 0) if cfg.visual_artifacts else _empty_rgb_artifact()
 
     manifest = dict(detection.manifest)
     full_components = list(manifest.get("components", []))
@@ -165,10 +166,11 @@ def run_red_highlight_detector(
     source_rgb = _ensure_rgb_u8(image.pixels)
     load_ms = _elapsed_ms(load_started)
 
-    result = detect_red_highlight_source_image(source_rgb, cfg)
+    detect_cfg = replace(cfg, visual_artifacts=True)
+    result = detect_red_highlight_source_image(source_rgb, detect_cfg)
 
     output_started = perf_counter()
-    write_image(output_path / "input_preview.png", _resize_long_edge_rgb(source_rgb, cfg.detection_long_edge))
+    write_image(output_path / "input_preview.png", _resize_long_edge_rgb(source_rgb, detect_cfg.detection_long_edge))
     write_image(output_path / "mask.png", result.mask)
     write_image(output_path / f"{_safe_stem(source_path)}_red_highlight_mask.png", result.mask)
     write_image(output_path / "preview_mask.png", result.preview_mask)
@@ -334,8 +336,12 @@ def detect_red_highlight_mask(
         kept_components.append({key: value for key, value in record.items() if key != "review_patch"})
 
     preview_mask = _apply_edge_mode(preview_mask, cfg.mask_edge_mode)
-    overlay = _overlay_mask(rgb, preview_mask)
-    score_map = _to_score_image(np.maximum.reduce([contrast_excess, contrast_glow, contrast_value * 0.55]))
+    overlay = _overlay_mask(rgb, preview_mask) if cfg.visual_artifacts else _empty_rgb_artifact()
+    score_map = (
+        _to_score_image(np.maximum.reduce([contrast_excess, contrast_glow, contrast_value * 0.55]))
+        if cfg.visual_artifacts or cfg.debug_artifacts
+        else _empty_gray_artifact()
+    )
     mask = preview_mask.astype(np.uint8) * 255
     manifest = {
         "detector_version": "red_highlight_v1",
@@ -886,6 +892,14 @@ def _overlay_mask(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
             255,
         ).astype(np.uint8)
     return overlay
+
+
+def _empty_rgb_artifact() -> np.ndarray:
+    return np.zeros((0, 0, 3), dtype=np.uint8)
+
+
+def _empty_gray_artifact() -> np.ndarray:
+    return np.zeros((0, 0), dtype=np.uint8)
 
 
 def _to_score_image(score: np.ndarray) -> np.ndarray:

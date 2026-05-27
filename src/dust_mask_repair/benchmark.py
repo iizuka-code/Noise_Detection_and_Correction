@@ -66,6 +66,7 @@ def run_benchmark(config: BenchmarkConfig | None = None) -> dict[str, Any]:
         max_scratch_area=max(9000, int(cfg.width * cfg.height * 0.035)),
         max_scratch_dim=max(720, int(max(cfg.width, cfg.height) * 0.75)),
         max_scratch_width=max(48, int(min(cfg.width, cfg.height) * 0.035)),
+        visual_artifacts=False,
     )
     repair_config = RepairConfig(
         method=cfg.method,
