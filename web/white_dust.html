@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dust Mask Test</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f5f7;
+      --panel: #ffffff;
+      --ink: #18212b;
+      --muted: #5f6d7b;
+      --line: #d6dde5;
+      --soft-line: #e7ecf1;
+      --accent: #14727d;
+      --accent-strong: #0f5964;
+      --danger: #b42318;
+      --surface: #101820;
+      --ok: #116149;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+    .status {
+      min-width: 180px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+    .status.is-error {
+      color: var(--danger);
+      font-weight: 700;
+    }
+    .status.is-ok {
+      color: var(--ok);
+      font-weight: 700;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+      gap: 14px;
+      padding: 14px;
+    }
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .controls {
+      padding: 14px;
+    }
+    .field {
+      margin-bottom: 13px;
+    }
+    .grid2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    input,
+    select,
+    button {
+      width: 100%;
+      font: inherit;
+    }
+    input[type="file"],
+    input[type="number"],
+    select {
+      min-height: 39px;
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+    }
+    input[type="checkbox"] {
+      width: auto;
+      margin-right: 7px;
+      accent-color: var(--accent);
+    }
+    button {
+      min-height: 42px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button:hover:not(:disabled) {
+      background: var(--accent-strong);
+    }
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+    details {
+      margin-top: 10px;
+      border-top: 1px solid var(--soft-line);
+      padding-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .checkline {
+      display: flex;
+      align-items: center;
+      margin: 12px 0 4px;
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .viewer {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      gap: 12px;
+      padding: 14px;
+    }
+    .compare {
+      position: relative;
+      overflow: hidden;
+      min-height: 520px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      --split: 50%;
+    }
+    .compare.ready {
+      min-height: 0;
+    }
+    .compare img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-height: 74vh;
+      object-fit: contain;
+      background: var(--surface);
+    }
+    .compare .source {
+      position: relative;
+      z-index: 1;
+    }
+    .compare .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      max-height: none;
+      object-fit: contain;
+      clip-path: inset(0 calc(100% - var(--split)) 0 0);
+      pointer-events: none;
+    }
+    .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: var(--split);
+      z-index: 4;
+      width: 2px;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.32);
+      pointer-events: none;
+    }
+    .badge {
+      position: absolute;
+      z-index: 5;
+      top: 10px;
+      padding: 6px 9px;
+      border-radius: 4px;
+      background: rgba(11, 20, 28, 0.86);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
+      pointer-events: none;
+    }
+    .badge.overlay-label {
+      left: 10px;
+      background: rgba(20, 114, 125, 0.94);
+    }
+    .badge.source-label {
+      right: 10px;
+    }
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 520px;
+      padding: 24px;
+      color: #c9d3dc;
+      text-align: center;
+      font-size: 14px;
+    }
+    .split-row {
+      display: grid;
+      grid-template-columns: 88px 1fr 88px;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    input[type="range"] {
+      accent-color: var(--accent);
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .metric {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px;
+      background: #fff;
+    }
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .metric strong {
+      display: block;
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 16px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .output-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    figure {
+      margin: 0;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+    }
+    figcaption {
+      margin-bottom: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      height: 210px;
+      object-fit: contain;
+      border-radius: 4px;
+      background: var(--surface);
+    }
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .links a {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 9px;
+      color: var(--accent-strong);
+      font-size: 13px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    .links a:hover {
+      border-color: var(--accent);
+    }
+    .hidden {
+      display: none !important;
+    }
+    @media (max-width: 1080px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .compare {
+        min-height: 420px;
+      }
+      .empty-state {
+        min-height: 420px;
+      }
+    }
+    @media (max-width: 720px) {
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .status {
+        text-align: left;
+      }
+      .grid2,
+      .output-grid,
+      .metrics,
+      .split-row {
+        grid-template-columns: 1fr;
+      }
+      figure img {
+        height: 180px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>浮き埃マスク検出テスト</h1>
+    <div id="status" class="status">待機中</div>
+  </header>
+  <main>
+    <section class="panel controls">
+      <form id="whiteDustForm">
+        <div class="field">
+          <label for="source">黒/茶色地の検査画像</label>
+          <input id="source" name="source" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,.dng,.rw2,.fff,.3fr,.arw,.cr2,.cr3,.nef,.orf,.raf,.rwl,.srw,.x3f,image/*" required>
+        </div>
+        <div class="field">
+          <label for="image">補正対象画像</label>
+          <input id="image" name="image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,.dng,.rw2,.fff,.3fr,.arw,.cr2,.cr3,.nef,.orf,.raf,.rwl,.srw,.x3f,image/*">
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="background_mode">背景モード</label>
+            <select id="background_mode" name="background_mode">
+              <option value="dark" selected>dark</option>
+              <option value="brown">brown</option>
+              <option value="any">any</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="mask_edge_mode">マスク境界</label>
+            <select id="mask_edge_mode" name="mask_edge_mode">
+              <option value="normal" selected>normal</option>
+              <option value="tight">tight</option>
+              <option value="wide">wide</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="threshold_sensitivity">検出感度</label>
+          <input id="threshold_sensitivity" name="threshold_sensitivity" type="number" min="0.35" step="0.05" value="1.0">
+        </div>
+        <label class="checkline">
+          <input id="require_brown_background" name="require_brown_background" type="checkbox" checked>
+          背景モードに限定
+        </label>
+        <button id="runButton" type="submit" disabled>実行</button>
+        <details>
+          <summary>詳細設定</summary>
+          <div class="grid2">
+            <div class="field">
+              <label for="detection_long_edge">検出 long edge</label>
+              <input id="detection_long_edge" name="detection_long_edge" type="number" min="1" step="1" value="1024">
+            </div>
+            <div class="field">
+              <label for="local_radius">局所半径</label>
+              <input id="local_radius" name="local_radius" type="number" min="0" step="1" value="0">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="focus_margin_x">focus margin x</label>
+              <input id="focus_margin_x" name="focus_margin_x" type="number" min="0" max="0.48" step="0.01" value="0.00">
+            </div>
+            <div class="field">
+              <label for="focus_margin_y">focus margin y</label>
+              <input id="focus_margin_y" name="focus_margin_y" type="number" min="0" max="0.48" step="0.01" value="0.00">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="dark_luma_max">dark luma max</label>
+              <input id="dark_luma_max" name="dark_luma_max" type="number" min="1" step="1" value="72">
+            </div>
+            <div class="field">
+              <label for="dark_value_max">dark value max</label>
+              <input id="dark_value_max" name="dark_value_max" type="number" min="1" step="1" value="96">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="min_area">min area</label>
+              <input id="min_area" name="min_area" type="number" min="0" step="1" value="2">
+            </div>
+            <div class="field">
+              <label for="max_area">max area</label>
+              <input id="max_area" name="max_area" type="number" min="1" step="1" value="12000">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="max_dim">max dim</label>
+              <input id="max_dim" name="max_dim" type="number" min="1" step="1" value="900">
+            </div>
+            <div class="field">
+              <label for="max_thickness">max thickness</label>
+              <input id="max_thickness" name="max_thickness" type="number" min="1" step="1" value="54">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="whiteness_min">whiteness min</label>
+              <input id="whiteness_min" name="whiteness_min" type="number" min="0" max="1" step="0.01" value="0.60">
+            </div>
+            <div class="field">
+              <label for="brown_blue_deficit_min">brown blue deficit</label>
+              <input id="brown_blue_deficit_min" name="brown_blue_deficit_min" type="number" min="0" step="0.5" value="8">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="brown_red_blue_ratio_min">brown red/blue ratio</label>
+              <input id="brown_red_blue_ratio_min" name="brown_red_blue_ratio_min" type="number" min="0.1" step="0.05" value="1.10">
+            </div>
+            <div class="field">
+              <label for="brown_luma_max">brown luma max</label>
+              <input id="brown_luma_max" name="brown_luma_max" type="number" min="1" step="1" value="170">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="value_min">value min</label>
+              <input id="value_min" name="value_min" type="number" min="0" step="1">
+            </div>
+            <div class="field">
+              <label for="value_contrast_min">value contrast min</label>
+              <input id="value_contrast_min" name="value_contrast_min" type="number" min="0" step="1">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="luma_min">luma min</label>
+              <input id="luma_min" name="luma_min" type="number" min="0" step="1">
+            </div>
+            <div class="field">
+              <label for="white_floor_min">white floor min</label>
+              <input id="white_floor_min" name="white_floor_min" type="number" min="0" step="1">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="bright_contrast_min">bright contrast min</label>
+              <input id="bright_contrast_min" name="bright_contrast_min" type="number" min="0" step="1">
+            </div>
+            <div class="field">
+              <label for="white_contrast_min">white contrast min</label>
+              <input id="white_contrast_min" name="white_contrast_min" type="number" min="0" step="1">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="method">補修 method</label>
+              <select id="method" name="method">
+                <option value="kl" selected>kl</option>
+                <option value="linear">linear</option>
+                <option value="defect_aware">defect_aware（自動・高品質）</option>
+                <option value="adaptive">adaptive</option>
+                <option value="hybrid">hybrid</option>
+                <option value="inpaint">inpaint</option>
+                <option value="median">median</option>
+                <option value="aggressive">aggressive</option>
+                <option value="wide_scratch">wide_scratch</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="strength">補修 strength</label>
+              <input id="strength" name="strength" type="number" min="0" max="1" step="0.05" value="1.0">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="dilate_radius">補修 dilate</label>
+              <input id="dilate_radius" name="dilate_radius" type="number" min="0" step="1" value="2">
+            </div>
+            <div class="field">
+              <label for="feather_radius">補修 feather</label>
+              <input id="feather_radius" name="feather_radius" type="number" min="0" step="1" value="1">
+            </div>
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="padding">補修 padding</label>
+              <input id="padding" name="padding" type="number" min="0" step="1" value="32">
+            </div>
+            <div class="field">
+              <label for="max_component_area">補修 max component</label>
+              <input id="max_component_area" name="max_component_area" type="number" min="1" step="1" value="200000">
+            </div>
+          </div>
+        </details>
+      </form>
+    </section>
+
+    <section class="panel viewer">
+      <div id="compare" class="compare">
+        <div class="empty-state">画像未選択</div>
+      </div>
+      <div class="split-row">
+        <span id="leftLabel">overlay</span>
+        <input id="split" type="range" min="0" max="100" value="50">
+        <span id="rightLabel">source</span>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span>mask pixels</span><strong id="maskPixels">-</strong></div>
+        <div class="metric"><span>components</span><strong id="components">-</strong></div>
+        <div class="metric"><span>candidates</span><strong id="candidates">-</strong></div>
+        <div class="metric"><span>time ms</span><strong id="timeMs">-</strong></div>
+      </div>
+      <div class="output-grid">
+        <figure>
+          <figcaption>白黒マスク</figcaption>
+          <img id="maskPreview" alt="">
+        </figure>
+        <figure>
+          <figcaption>score</figcaption>
+          <img id="scorePreview" alt="">
+        </figure>
+        <figure>
+          <figcaption>preview mask</figcaption>
+          <img id="previewMask" alt="">
+        </figure>
+        <figure id="targetMaskOverlayFigure" class="hidden">
+          <figcaption>対象画像上のマスク</figcaption>
+          <img id="targetMaskOverlay" alt="">
+        </figure>
+      </div>
+      <div id="links" class="links hidden"></div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("whiteDustForm");
+    const sourceInput = document.getElementById("source");
+    const targetInput = document.getElementById("image");
+    const runButton = document.getElementById("runButton");
+    const statusEl = document.getElementById("status");
+    const compare = document.getElementById("compare");
+    const split = document.getElementById("split");
+    const leftLabel = document.getElementById("leftLabel");
+    const rightLabel = document.getElementById("rightLabel");
+    const maskPreview = document.getElementById("maskPreview");
+    const scorePreview = document.getElementById("scorePreview");
+    const previewMask = document.getElementById("previewMask");
+    const targetMaskOverlayFigure = document.getElementById("targetMaskOverlayFigure");
+    const targetMaskOverlay = document.getElementById("targetMaskOverlay");
+    const maskPixels = document.getElementById("maskPixels");
+    const components = document.getElementById("components");
+    const candidates = document.getElementById("candidates");
+    const timeMs = document.getElementById("timeMs");
+    const links = document.getElementById("links");
+    let autoTimer = 0;
+    let isRunning = false;
+    let rerunRequested = false;
+    let runSerial = 0;
+
+    sourceInput.addEventListener("change", scheduleAutoRun);
+    targetInput.addEventListener("change", scheduleAutoRun);
+    form.addEventListener("change", (event) => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "file") {
+        return;
+      }
+      scheduleAutoRun();
+    });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      runDetection();
+    });
+    split.addEventListener("input", () => {
+      compare.style.setProperty("--split", `${split.value}%`);
+    });
+    syncReady();
+
+    function scheduleAutoRun() {
+      syncReady();
+      window.clearTimeout(autoTimer);
+      if (!hasRequiredFile()) {
+        setStatus("待機中", "");
+        return;
+      }
+      setStatus("実行待ち", "");
+      autoTimer = window.setTimeout(runDetection, 300);
+    }
+
+    function syncReady() {
+      runButton.disabled = !hasRequiredFile() || isRunning;
+    }
+
+    function hasRequiredFile() {
+      return sourceInput.files.length > 0;
+    }
+
+    async function runDetection() {
+      if (!hasRequiredFile()) {
+        syncReady();
+        return;
+      }
+      if (isRunning) {
+        rerunRequested = true;
+        return;
+      }
+      const currentRun = ++runSerial;
+      isRunning = true;
+      rerunRequested = false;
+      syncReady();
+      const isRepair = targetInput.files.length > 0;
+      setStatus(isRepair ? "検出と補正を処理中" : "検出中", "");
+      try {
+        const endpoint = isRepair ? "/api/repair-white-dust" : "/api/detect-white-dust";
+        const response = await fetch(endpoint, {
+          method: "POST",
+          body: new FormData(form),
+        });
+        const payload = await response.json();
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error || "detect failed");
+        }
+        if (currentRun === runSerial) {
+          renderResult(payload);
+          setStatus(`完了 ${payload.run_id}`, "is-ok");
+        }
+      } catch (error) {
+        setStatus(String(error.message || error), "is-error");
+      } finally {
+        isRunning = false;
+        syncReady();
+        if (rerunRequested) {
+          scheduleAutoRun();
+        }
+      }
+    }
+
+    function renderResult(payload) {
+      const cache = `?t=${Date.now()}`;
+      const manifest = payload.white_dust || {};
+      const isRepair = Boolean(payload.repaired_url);
+      const beforeUrl = isRepair ? (payload.input_url || payload.input_preview_url) : (payload.source_preview_url || payload.source_url);
+      const afterUrl = isRepair ? payload.repaired_url : (payload.overlay_preview_url || payload.overlay_url);
+      const beforeLabel = isRepair ? "補正前" : "source";
+      const afterLabel = isRepair ? "補正後" : "overlay";
+      compare.classList.add("ready");
+      compare.style.setProperty("--split", `${split.value}%`);
+      compare.innerHTML = `
+        <img class="source" src="${beforeUrl}${cache}" alt="${beforeLabel}">
+        <img class="overlay" src="${afterUrl}${cache}" alt="${afterLabel}">
+        <div class="badge overlay-label">${afterLabel}</div>
+        <div class="badge source-label">${beforeLabel}</div>
+        <div class="divider"></div>
+      `;
+      leftLabel.textContent = afterLabel;
+      rightLabel.textContent = beforeLabel;
+      maskPreview.src = `${payload.fitted_mask_url || payload.generated_mask_url}${cache}`;
+      scorePreview.src = `${payload.score_url}${cache}`;
+      previewMask.src = `${payload.preview_mask_url}${cache}`;
+      if (isRepair && payload.target_mask_overlay_url) {
+        targetMaskOverlayFigure.classList.remove("hidden");
+        targetMaskOverlay.src = `${payload.target_mask_overlay_url}${cache}`;
+      } else {
+        targetMaskOverlayFigure.classList.add("hidden");
+        targetMaskOverlay.removeAttribute("src");
+      }
+      maskPixels.textContent = formatNumber(manifest.final_mask_pixels);
+      components.textContent = formatNumber(manifest.component_count);
+      candidates.textContent = formatNumber(manifest.candidate_pixels_after_prefilter);
+      timeMs.textContent = formatValue((manifest.timings_ms || {}).total_ms);
+      links.classList.remove("hidden");
+      const repairLinks = isRepair ? `
+        <a href="${payload.repaired_url}${cache}" target="_blank" rel="noreferrer">補正後画像</a>
+        <a href="${payload.fitted_mask_url}${cache}" target="_blank" rel="noreferrer">補正用マスク</a>
+        ${payload.fitted_xmp_url ? `<a href="${payload.fitted_xmp_url}${cache}" target="_blank" rel="noreferrer">補正用XMP</a>` : ""}
+        <a href="${payload.target_mask_overlay_url}${cache}" target="_blank" rel="noreferrer">対象画像上のマスク</a>
+        <a href="${payload.diff_url}${cache}" target="_blank" rel="noreferrer">diff PNG</a>
+      ` : "";
+      links.innerHTML = `
+        ${repairLinks}
+        <a href="${payload.generated_mask_url}${cache}" target="_blank" rel="noreferrer">白黒マスク</a>
+        ${payload.xmp_url ? `<a href="${payload.xmp_url}${cache}" target="_blank" rel="noreferrer">検出XMP</a>` : ""}
+        <a href="${payload.overlay_url}${cache}" target="_blank" rel="noreferrer">overlay PNG</a>
+        <a href="${payload.score_url}${cache}" target="_blank" rel="noreferrer">score PNG</a>
+        <a href="${payload.manifest_url}${cache}" target="_blank" rel="noreferrer">検出JSON</a>
+      `;
+    }
+
+    function formatNumber(value) {
+      if (value === undefined || value === null) {
+        return "-";
+      }
+      return Number(value).toLocaleString("ja-JP");
+    }
+
+    function formatValue(value) {
+      if (value === undefined || value === null) {
+        return "-";
+      }
+      return Number(value).toFixed(3);
+    }
+
+    function setStatus(message, className) {
+      statusEl.className = `status ${className}`.trim();
+      statusEl.textContent = message;
+    }
+  </script>
+</body>
+</html>
