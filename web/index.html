@@ -257,7 +257,7 @@
         </div>
         <div class="field">
           <label for="image">補正を掛けるファイル</label>
-          <input id="image" name="image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,image/*" required>
+          <input id="image" name="image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,.dng,.rw2,.fff,.3fr,.arw,.cr2,.cr3,.nef,.orf,.raf,.rwl,.srw,.x3f,image/*" required>
         </div>
         <div class="field" id="maskField">
           <label for="mask">マスクPNG</label>
@@ -265,13 +265,17 @@
         </div>
         <div class="field hidden" id="redField">
           <label for="red_image">赤照明画像</label>
-          <input id="red_image" name="red_image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,image/*">
+          <input id="red_image" name="red_image" type="file" accept=".png,.tif,.tiff,.jpg,.jpeg,.dng,.rw2,.fff,.3fr,.arw,.cr2,.cr3,.nef,.orf,.raf,.rwl,.srw,.x3f,image/*">
         </div>
         <div class="grid2">
           <div class="field">
             <label for="method">method</label>
             <select id="method" name="method">
-              <option value="aggressive" selected>aggressive</option>
+              <option value="kl" selected>kl</option>
+              <option value="linear">linear</option>
+              <option value="defect_aware">defect_aware</option>
+              <option value="aggressive">aggressive</option>
+              <option value="adaptive">adaptive</option>
               <option value="wide_scratch">wide_scratch</option>
               <option value="hybrid">hybrid</option>
               <option value="inpaint">inpaint</option>
@@ -467,7 +471,7 @@
       compare.classList.add("has-result");
       compare.style.setProperty("--split", `${split.value}%`);
       compare.innerHTML = `
-        <img class="before-layer" src="${payload.input_url}${cache}" alt="補正前">
+        <img class="before-layer" src="${payload.input_preview_url || payload.input_url}${cache}" alt="補正前">
         <img class="after-layer" src="${payload.repaired_url}${cache}" alt="補正後">
         <div class="compare-badge after">補正後</div>
         <div class="compare-badge before">補正前</div>

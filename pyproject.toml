@@ -24,12 +24,18 @@ dev = [
 tiff = [
   "tifffile>=2024.0"
 ]
+raw = [
+  "rawpy>=0.20"
+]
 
 [project.scripts]
 dust-mask-repair = "dust_mask_repair.cli:main"
 dust-mask-repair-web = "dust_mask_repair.server:main"
 dust-mask-detect-red = "dust_mask_repair.red_highlight_cli:main"
 dust-mask-repair-red = "dust_mask_repair.red_highlight_cli:repair_main"
+dust-mask-detect-white = "dust_mask_repair.white_dust_cli:main"
+dust-mask-repair-white = "dust_mask_repair.white_dust_cli:repair_main"
+dust-mask-repair-gui = "dust_mask_repair.gui:main"
 dust-mask-benchmark = "dust_mask_repair.benchmark:main"
 
 [tool.setuptools.packages.find]

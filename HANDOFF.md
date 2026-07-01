@@ -15,6 +15,28 @@
 - 2026-05-27: 本体統合用に `repair_image_from_red_highlight()` を追加。decode済みRGB/RGBA配列と赤照明RGB配列を渡すだけで、白黒マスク生成から補修まで実行できる。
 - 2026-05-27: 太い傷・広い傷向けに `wide_scratch` methodを追加。マスク成分の向きから狭い軸を選び、左右または上下の文脈をspan単位で補間してからマスク内だけ軽く平滑化する。
 - 2026-05-27: `RedHighlightConfig.visual_artifacts` を追加。非デバッグの補修連結やベンチマークではoverlay/score map配列を作らず、検出CLIとWeb UIでは従来通り生成する。
+- 2026-05-29: 茶色地に浮いた白い埃を検出する初期版、`/api/detect-white-dust`、`web/white_dust.html` を追加。補修ユニットは変更していない。
+- 2026-05-29: optional `rawpy` 経由のRAW入力対応を追加。DNG/ARW/RW2/FFFなどをRGBへ現像して既存の浮き埃検出・補修入力に渡し、Web UIではRAW表示用にpreview PNGを生成する。
+- 2026-06-03: 浮き埃検出を `dust_on_dark_or_brown_v2` に更新。黒/暗背景上の白または有色の埃を既定で検出し、茶色地は `background_mode="brown"` の互換モードとして残した。ARW拡張子のRAW入力テストも追加。
+- 2026-06-03: `web/white_dust.html` に補正対象PNG入力を追加。`/api/repair-white-dust` で検査画像から生成したマスクをPNGへ縦横比合わせで投影し、補修まで実行できるようにした。
+- 2026-06-04: 補正対象をPNGからJPEG/JPGへ変更。`/api/repair-white-dust` はJPEG対象だけを受け付け、生成マスクをJPEGへ縦横比合わせで投影して `repaired.jpg` を返す。
+- 2026-06-04: 補修ユニットに `adaptive` method を追加。`core_mask` / `repair_mask` / `blend_alpha` を分離し、正規化畳み込み、局所平面近似、PCA方向補間、強化guard、追加metrics/debug artifactを導入。白埃補正Web APIの既定methodを `adaptive` に変更。
+- 2026-06-13: `linear` / `kl` method を補修ユニットへ追加。`linear` はマスク芯だけを周辺画素から反復線形補間し、`kl` は線形補間後に周辺RGBヒストグラムへマスク内分布を近づける。白埃検査画像からマスク生成して対象画像を補修する `repair_image_from_white_dust()` と `dust-mask-repair-white` CLI を追加し、白埃Web補修の既定methodを `kl` に変更。
+- 2026-06-14: 改善計画スライス1として `defect_aware` method の土台を追加。この時点ではCLI/APIで指定可能、内部は `adaptive` fallback、metricsに `defect_aware_version` / `defect_strategy_counts` / `defect_aware_fallback_method` を記録する状態。
+- 2026-06-14: 改善計画スライス2として `src/dust_mask_repair/defects.py` を追加。`defect_aware` 実行時にcomponentごとの欠陥分類を行い、`defect_classification_enabled` / `defect_component_count` / strategy counts / area histogram / texture summaryをmetricsへ記録し、`debug_dir` 指定時に `defect_components.json` を保存する状態。この時点の実補修は `adaptive` fallback。
+- 2026-06-14: 改善計画スライス3として `src/dust_mask_repair/local_repair.py` を追加。`tiny_local` / `small_local` に分類されたcomponentを局所平面補間またはcontext中央値で補修し、context不足時は `adaptive` fallbackへ逃がす。metricsに `small_local_component_count` / `small_local_pixel_count` / `small_local_plane_count` / `small_local_median_count` / `small_local_fallback_count` を追加。
+- 2026-06-14: 改善計画スライス4として `fast_inpaint` strategyを `repair_fast_inpaint_roi()` へ接続。context plane/median初期化後、既知画素を固定してunknownのみ8近傍平均で反復更新する。metricsに `fast_inpaint_component_count` / `fast_inpaint_pixel_count` / `fast_inpaint_iterations_total` / `fast_inpaint_fallback_count` を追加。
+- 2026-06-14: 改善計画スライス5として `directional` strategyをPCA方向補間へ接続。短軸方向の近傍正常画素から補間し、cap超過や未補間時はfallbackを使う。metricsに `directional_component_count` / `directional_pixel_count` / `directional_fallback_count` / `directional_cap_exceeded_count` を追加。
+- 2026-06-14: 改善計画スライス6として `src/dust_mask_repair/patch_repair.py` を追加。`patch` strategyでcomponent bbox周辺の同サイズwindowを決定的に探索し、repair maskと重なる候補を除外して最良候補からcomponent内だけをコピーする。metricsに `patch_component_count` / `patch_pixel_count` / `patch_candidate_count_total` / `patch_fallback_count` / `patch_best_score_mean` / `patch_stride_used_counts` を追加。
+- 2026-06-14: 改善計画スライス7として `src/dust_mask_repair/grain.py` を追加。成功した専用補修candidateに対し、周辺contextの高周波残差を座標hashでdeterministicに再注入する。`grain_reinject_strength=0` で完全無効。metricsに `grain_reinject_enabled` / `grain_reinject_strength` / `grain_reinject_component_count` / `grain_reinject_pixel_count` / `grain_reinject_skipped_no_context_count` を追加。
+- 2026-06-14: 改善計画スライス8として `defect_aware` の合成metricsを追加。既存 `core_mask` / `repair_mask` / `blend_alpha` 体系を維持し、`defect_aware_blend_shell_pixel_count` / `defect_aware_alpha_nonzero_pixel_count` を記録する。strength=0、feather、shell、16bitの不変性テストを追加。
+- 2026-06-14: 改善計画スライス9として `defect_aware` ルーター統合テストを追加。tiny/fast/directional/patch混在ケースを検証し、`debug_dir` に `defect_strategy_summary.json` も出力する。
+- 2026-06-14: 改善計画スライス11として `benchmark.py` にdefect-aware品質評価helperを追加。`flat_dots` / `gradient_dust` / `grain_dust` / `stripe_texture` / `diagonal_edge` / `thin_scratch` の合成ケースで、inside error、outside invariance、strategy counts、determinismを軽量pytestで確認できる。
+- 2026-06-21: defect-aware品質評価helperに `diagonal_edge_micro_dust`, `chroma_edge_micro_dust`, `thin_line_micro_dust`, `gradient_micro_dust` を追加し、edge-guided無効時とのmask内MAE比較を返すようにした。
+- 2026-06-14: 改善計画スライス10として `defect_aware` をGUI/Web選択肢に公開。GUI既定値は `kl` のまま。GUI高速モードではlinear系fallbackを使い、`gui_fast_fallback_method: "linear"` をmetricsに記録する。通常CLI、白埃CLI、赤照明CLIでも `--method defect_aware` を明示テスト済み。
+- 2026-06-21: `defect_aware` の `tiny_local` / `small_local` 内部に edge-guided local repair を追加。RGB構造テンソルで方向信頼度が高い微小欠陥だけisophote方向に補間し、低信頼・context不足・cap超過時は既存local plane/context medianへfallbackする。追加metricsとdebug JSON、合成benchmarkケース、回帰テストを追加。
+- 2026-06-21: 簡易GUIに `edge-guidedテスト` ボタンを追加。写真選択なしで `diagonal_edge_micro_dust` 合成ケースを生成し、edge-guided有効/無効比較、模範解答、誤差ヒートマップ、metrics/result JSON、debug component JSONを出力してGUI上でPASS/FAILを確認できる。
+- 2026-06-21: 実写真補修向けにGUIへ `周辺補正 px`, `境界なじませ px`, `色なじませ強度`, `粒状感強度` を追加。`defect_aware` のtiny/small localは拡張後repair maskを実補修対象にし、色なじませmetricsと `repair_mask_expanded.png` を出力する。
 
 ## 1. このリポジトリの位置づけ
 
@@ -25,7 +47,7 @@
 1. 通常のフィルムスキャン画像
 2. すでに別工程で生成済みの埃位置マスクPNG
 
-このプロジェクトは埃検出を行いません。レーザー照射画像などから埃・塵の位置を赤く浮かび上がらせ、その結果をマスクPNGとして出力する工程は、すでに別システムで完了している前提です。
+補修エンジン自体はマスク指定型です。補助機能として、赤照明検査画像と、黒/暗背景または茶色地に浮いた埃の検査画像から黒地白マスクを生成する検出器を持っています。RAW/DNG/ARW decode は optional `rawpy` 経由のスタンドアロン検証用で、写真反転本体の scene-linear RAW 現像パイプラインを置き換えるものではありません。
 
 重要な設計方針は「ノイズリダクションではなく、マスクで指定された局所欠陥のスポット補修」として扱うことです。画像全体にぼかし、ノイズ低減、シャープ化、色補正をかける処理は入れていません。
 
@@ -51,6 +73,7 @@ dust-mask-repair/
     README.md
   web/
     index.html
+    white_dust.html
   src/
     dust_mask_repair/
       __init__.py
@@ -64,6 +87,7 @@ dust-mask-repair/
       red_highlight_cli.py
       repair.py
       server.py
+      white_dust.py
       workflow.py
   tests/
     test_benchmark.py
@@ -72,8 +96,10 @@ dust-mask-repair/
     test_mask_loading.py
     test_red_highlight.py
     test_red_highlight_regression.py
+    test_raw_io.py
     test_repair.py
     test_server.py
+    test_white_dust.py
     test_workflow.py
 ```
 
@@ -90,6 +116,7 @@ dust-mask-repair/
 
 - `dev`: `pytest>=8.0`
 - `tiff`: `tifffile>=2024.0`
+- `raw`: `rawpy>=0.20`
 
 実装時のローカル確認環境:
 
@@ -99,6 +126,8 @@ dust-mask-repair/
 - pytest: 8.4.2
 
 `imageio` はローカルに未導入だったため使っていません。16bit RGB PNG をPillow任せにすると8bit化のリスクがあるため、PNGについては内部実装のreader/writerを用意しました。
+
+RAW入力は optional `rawpy` / LibRaw に委譲しています。DNG/ARW/RW2/FFFなどを16bit RGBへ現像して既存処理へ渡すための入口であり、黒地検査画像の背景を灰色へ持ち上げないよう `no_auto_bright=True` を指定しています。白埃/浮き埃検出のRAW経路では速度優先で half-size 8bit proxy と長辺1024px既定を使い、通常の `read_image()` は従来通り full-size 16bit を既定にします。RAWパーサや本格的なRAW現像パイプラインはこのリポジトリ内で再実装していません。ローカルの `rawpy 0.26.1` はPyPI classifier上はMITですが、配布形態ごとのLibRaw同梱条件はリリース前に再確認してください。
 
 ## 5. インストールと実行コマンド
 
@@ -157,7 +186,7 @@ CLI引数:
 - `--image`: 必須。入力RGB/RGBA PNG/TIFF。
 - `--mask`: 必須。埃マスク。ヘルプ上はPNG前提だが、実装上は `read_image()` 経由なのでTIFFも読める可能性がある。ただしマスク仕様としてはPNGを前提に扱う。
 - `--output`: 必須。出力PNG/TIFF。
-- `--method`: `median`, `inpaint`, `denoise`, `hybrid`, `aggressive`, `wide_scratch`。既定値は `hybrid`。
+- `--method`: `linear`, `kl`, `defect_aware`, `median`, `inpaint`, `denoise`, `hybrid`, `adaptive`, `aggressive`, `wide_scratch`。既定値は `hybrid`。
 - `--mask-channel`: `auto`, `grayscale`, `alpha`, `red`, `max_rgb`。既定値は `auto`。
 - `--threshold`: float。既定値 `0.5`。
 - `--dilate-radius`: int。既定値 `2`。
@@ -195,7 +224,7 @@ dust-mask-detect-red --source red_lit_scan.png --output-dir red_mask_output
 dust-mask-repair-red --image normal_scan.png --red-image red_lit_scan.png --output repaired.png
 ```
 
-`--image` と `--red-image` は同一寸法である必要があります。自動位置合わせ、回転、クロップ合わせ、RAW decode は未実装です。
+`--image` と `--red-image` は同一寸法である必要があります。自動位置合わせ、回転、クロップ合わせは未実装です。RAWファイル入力は optional `rawpy` 経由でRGBへ現像するスタンドアロン検証用の入口として扱います。
 
 長い赤スクラッチは誤検出リスクが違うため、既定では従来通り除外されます。検出する場合は明示的に有効化します。
 
@@ -253,7 +282,7 @@ py -3.12 -m dust_mask_repair.server --host 127.0.0.1 --port 8765
 http://127.0.0.1:8765/
 ```
 
-HTML UIでは、入力モードを選択できます。
+トップページのHTML UIでは、入力モードを選択できます。
 
 - `mask PNG`: 補正対象ファイルと既存マスクファイルを選択し、従来通り `/api/repair` で補修します。
 - `red highlight`: 補正対象ファイルと同一寸法の赤照明検査画像を選択し、`/api/repair-red` で白黒マスク生成から補修まで実行します。
@@ -261,6 +290,16 @@ HTML UIでは、入力モードを選択できます。
 実行後はbefore/afterをスライダー比較し、mask、diff、metricsも同じ画面で確認できます。赤照明モードでは、画面上のmask表示に生成済み白黒マスクを使います。出力は `web_outputs/<run_id>/` に保存されます。
 
 赤照明モードでは `include long scratches` を有効にすると、細長い赤スクラッチ用の別上限（aspect、width、dim、area）を使って検出します。既定ではOFFです。
+
+黒/暗背景または茶色地に浮いた埃のマスク生成だけを確認する専用UI:
+
+```text
+http://127.0.0.1:8765/white_dust.html
+```
+
+`white_dust.html` は、検査画像だけが選ばれている場合は `/api/detect-white-dust` で黒地白マスク、overlay、score map、manifestを `web_outputs/<run_id>/white_dust/` に保存します。補正対象JPEG/JPGも選ばれている場合は `/api/repair-white-dust` を使い、生成マスクをJPEGへ投影して補修後JPEGも保存します。PNG/JPEG/TIFFに加えて、optional `rawpy` が入っていれば検査画像としてDNG/ARW/RW2/FFFなどのRAW入力も受け付けます。RAWは half-size 8bit の検出用proxyとして現像し、ブラウザ表示用に `source_preview.png` を生成します。RAWの検出専用マスクはpreviewサイズで、表示用source/overlayと寸法を揃えます。補正対象JPEGとマスクの解像度または縦横比が違う場合は、中心基準の縦横比クロップ後にnearest resizeして補修対象へ合わせます。UIは `background mode=dark`、`detection long edge=1024`、`focus margin x/y=0` を既定にし、黒/暗背景の全体検査と応答速度を優先します。茶色地の旧テスト写真では `background mode=brown` に切り替え、必要に応じて focus margin でホルダーや明るい枠を除外します。
+
+通常補修/赤照明補修のトップページでもRAW入力時のブラウザ表示用に `input_preview.png` を返します。補修処理自体は `read_image()` で現像されたRGB配列を使います。
 
 ## 7. ライブラリAPI
 
@@ -278,13 +317,21 @@ from dust_mask_repair import RedHighlightConfig, detect_red_highlight_mask
 
 `detect_red_highlight_mask(red_lit_image, RedHighlightConfig())` は、赤照明で浮いた埃・塵・短い欠陥を黒地の白マスク `uint8` として返します。通常スキャン画像から埃を検出する経路ではありません。長い赤スクラッチは `RedHighlightConfig(include_long_scratches=True)` のときだけ、`min_scratch_aspect` / `max_scratch_width` / `max_scratch_dim` / `max_scratch_area` の別上限で保持します。補修連結やbatch/export用途でoverlayが不要な場合は `RedHighlightConfig(visual_artifacts=False)` を使います。
 
+黒/暗背景または茶色地の浮き埃からマスクを作る追加APIもexportしています。
+
+```python
+from dust_mask_repair import WhiteDustConfig, detect_white_dust_mask
+```
+
+`detect_white_dust_mask(dark_base_image, WhiteDustConfig())` は、黒/暗背景上の白または有色の埃・塵を黒地の白マスク `uint8` として返します。`WhiteDustConfig(background_mode="brown")` を指定すると茶色地の旧検査写真向けの背景判定を使います。`dark_luma_max` / `dark_value_max` や `brown_luma_max` で背景条件を調整し、`focus_margin_x` / `focus_margin_y` で検出領域を限定できます。補修連結やbatch/export用途でoverlayが不要な場合は `WhiteDustConfig(visual_artifacts=False)` を使います。
+
 本体統合用の連結APIもexportしています。
 
 ```python
 from dust_mask_repair import RedHighlightRepairResult, repair_image_from_red_highlight
 ```
 
-`repair_image_from_red_highlight(normal_rgb_or_rgba, red_lit_rgb, red_config, repair_config)` は、decode済みの通常画像配列と赤照明画像配列を受け取り、寸法一致を確認した上で、赤照明マスク生成と補修を連続実行します。RAW/DNG decodeはこのリポジトリでは行いません。
+`repair_image_from_red_highlight(normal_rgb_or_rgba, red_lit_rgb, red_config, repair_config)` は、decode済みの通常画像配列と赤照明画像配列を受け取り、寸法一致を確認した上で、赤照明マスク生成と補修を連続実行します。ファイル入力としては optional `rawpy` 経由のRAW decodeも使えますが、このAPI自体はRGB/RGBA配列を受ける境界のままです。
 
 利用例:
 
@@ -344,7 +391,7 @@ collect_debug_images: bool = False
 
 `validate()` で以下をチェックします。
 
-- `method` は `median`, `inpaint`, `denoise`, `hybrid`, `aggressive`, `wide_scratch` のいずれか。
+- `method` は `linear`, `kl`, `defect_aware`, `median`, `inpaint`, `denoise`, `hybrid`, `adaptive`, `aggressive`, `wide_scratch` のいずれか。
 - `mask_channel` は `auto`, `grayscale`, `alpha`, `red`, `max_rgb` のいずれか。
 - `threshold` は `0.0..1.0`。
 - `dilate_radius` と `feather_radius` は0以上。
@@ -480,6 +527,24 @@ debug_paths: dict[str, str]
 - 同じ行または列に両側contextがない場合は片側context、それもない場合はdiffusion fallbackを使う。
 - 補間後、マスク内だけ半径1のbox blurを20%混ぜ、ROI内のcontext画素は元ROIに戻す。
 - 画像全体へのblurではなく、最終合成も従来通り `soft_mask * strength` で制限する。
+
+### 9.7 `defect_aware`
+
+関数: `_repair_roi()` 内の `method == "defect_aware"` 経路。
+
+- スライス9時点では高品質補修ルーターとして、欠陥分類、小欠陥補修、fast inpaint、directional補間、局所patch補修、grain reinjection、blend metricsを統合している。
+- `tiny_local` / `small_local` は、RGB構造テンソルのcoherence/gradient energyが十分な場合だけedge-guided local repairを優先する。isophote方向の正負両側にある正常画素から距離重みで補間し、成立しない画素は局所平面またはcontext中央値で埋める。`fast_inpaint` はNumPy反復補修、`directional` はPCA方向補間、`patch` は局所window探索を使う。成功candidateにはdeterministicなgrain再注入を適用できる。候補不足やcap超過は既存 `adaptive` にフォールバックする。
+- metricsに `defect_aware: true`, `defect_aware_version: 1`, `defect_classification_enabled`, `defect_component_count`, `defect_strategy_counts`, `defect_area_histogram`, `defect_texture_summary`, `defect_classifier_version`, `defect_aware_fallback_method: "adaptive"` を記録する。
+- 小欠陥補修metricsとして `small_local_component_count`, `small_local_pixel_count`, `small_local_plane_count`, `small_local_median_count`, `small_local_fallback_count` に加え、`small_local_edge_guided_component_count`, `small_local_edge_guided_pixel_count`, `small_local_edge_guided_fallback_count`, `small_local_edge_guided_low_confidence_count`, `small_local_edge_guided_coherence_mean` も記録する。
+- fast inpaint metricsとして `fast_inpaint_component_count`, `fast_inpaint_pixel_count`, `fast_inpaint_iterations_total`, `fast_inpaint_fallback_count` も記録する。
+- directional metricsとして `directional_component_count`, `directional_pixel_count`, `directional_fallback_count`, `directional_cap_exceeded_count` も記録する。
+- patch metricsとして `patch_component_count`, `patch_pixel_count`, `patch_candidate_count_total`, `patch_fallback_count`, `patch_best_score_mean`, `patch_stride_used_counts` も記録する。
+- grain metricsとして `grain_reinject_enabled`, `grain_reinject_strength`, `grain_reinject_component_count`, `grain_reinject_pixel_count`, `grain_reinject_skipped_no_context_count` も記録する。
+- blend metricsとして `defect_aware_blend_shell_pixel_count`, `defect_aware_alpha_nonzero_pixel_count` も記録する。
+- GUI/Web UIから選択可能。GUI既定は `kl` のまま。
+- `debug_dir` 指定時は `defect_components.json` と `defect_strategy_summary.json` を保存する。tiny/small localではcomponent単位で `edge_guided_used`, `edge_guided_fallback_reason`, `edge_guided_coherence`, `edge_guided_gradient_energy`, `local_method` も記録する。
+- CLI/API/GUI/Webから選択できる。GUI既定値は `kl` のまま。
+- 後続スライスではUI公開、docs最終整理を行う。
 
 ## 10. マスク処理の詳細
 
@@ -679,7 +744,7 @@ outside/insideの判定は `soft_mask > 0.0` です。
 
 ## 14. テスト構成
 
-テストは38件あります。
+テストは52件あります。
 
 ### 14.1 `tests/test_benchmark.py`
 
@@ -771,9 +836,29 @@ outside/insideの判定は `soft_mask > 0.0` です。
 ### 14.8 `tests/test_server.py`
 
 - `/api/repair-red` が通常画像と赤照明画像を受け取り、生成マスクと補修画像URLを返すこと。
+- `/api/detect-white-dust` が黒/暗背景上の白または有色の浮き埃検査画像を受け取り、生成マスク、overlay、score URLを返すこと。
+- `/api/detect-white-dust` がRAW拡張子のアップロードを受け取り、表示用 `source_preview.png` を返すこと。
+- `/api/repair-white-dust` がRAW検査画像から生成したマスクを縦横比の異なるJPEG補正対象へ投影し、補修画像を返すこと。
 - 通常画像と赤照明画像の寸法が異なる場合、400エラーで明示的に拒否すること。
+- `/white_dust.html` がローカルWebサーバーから取得できること。
 
-### 14.9 `tests/test_workflow.py`
+### 14.9 `tests/test_raw_io.py`
+
+- `rawpy` 未導入時にRAW入力を明示的なエラーで拒否すること。
+- fake `rawpy` を使ってRW2拡張子が16bit RGBとして読まれること。
+- fake `rawpy` を使ってARW拡張子が16bit RGBとして読まれること。
+- fake `rawpy` を使ってRAW高速proxy経路が half-size 8bit decode を要求すること。
+- fake `rawpy` を使ってFFF拡張子が浮き埃検出の入力として通ること。
+
+### 14.10 `tests/test_white_dust.py`
+
+- 黒/暗背景に合成した白または有色の浮き埃を黒地白マスクとして検出すること。
+- `background_mode="brown"` で茶色地に合成した白いうねり埃を検出できること。
+- `visual_artifacts=False` のときにmaskは変えず、overlay/score map配列を省略すること。
+- source-size detectionで検出用縮小後のマスクを元画像サイズへ戻すこと。
+- 明るい暖色フレームを `brown_luma_max` で抑制できること。
+
+### 14.11 `tests/test_workflow.py`
 
 - `repair_image_from_red_highlight()` がdecode済みRGB配列を受け取り、赤照明マスク生成から補修まで返すこと。
 - `red_config` 未指定時に `visual_artifacts=False` を使い、補修連結で不要なoverlay/score map配列を作らないこと。
@@ -790,7 +875,7 @@ py -3.12 -m pytest -q -p no:cacheprovider
 結果:
 
 ```text
-38 passed
+58 passed
 ```
 
 構文・ビルド確認:
@@ -912,6 +997,7 @@ max_abs_diff_outside_mask_max: 0.0
 
 - `test_outputs/` はテスト実行で生成されます。
 - `web_outputs/` はHTML UI実行で生成されます。
+- `manual_outputs/` は実画像を使った手元確認で生成されます。リポジトリには含めません。
 - `.pytest_tmp/` と `pytest-cache-files-*` は権限問題由来の残骸です。`.gitignore` 済みですが、環境によっては手動削除に管理者権限等が必要かもしれません。
 
 ## 18. 将来の改善案
@@ -944,7 +1030,8 @@ max_abs_diff_outside_mask_max: 0.0
 
 統合時に必ず確認すること:
 
-- 本体側でRAW/DNGをdecodeし、このリポジトリにはdecode済みRGB/RGBA配列を渡す。
+- 本体側がRAW/DNG現像を管理する場合は、このリポジトリにはdecode済みRGB/RGBA配列を渡す。
+- スタンドアロン検証では optional `rawpy` 経由のRAW入力を使えるが、scene-linearな本体現像パイプラインの代替にはしない。
 - 赤照明画像との連結は `repair_image_from_red_highlight()` を基本入口にする。
 - batch/exportなど表示が不要な経路では `RedHighlightConfig(visual_artifacts=False)` を使う。
 - 通常スキャン画像と埃マスクに同じ幾何変換を適用する。
@@ -1003,8 +1090,9 @@ I/Oを変更する場合:
 
 - ライブラリAPI: 実装済み。
 - CLI: 実装済み。
+- デスクトップGUI: `KLComplementary2_0_GUI.pyw` のダブルクリック、または `dust-mask-repair-gui` で実装済み。補正対象写真、マスク作成用写真、`kl` / `linear`、出力フォルダを選び、補正後画像、生成マスク、検出overlay、score、processing_status JSON、metrics JSON、結果JSONを保存する。補正対象写真とマスク作成用写真の両方で `.arw` を含むRAW入力を受け付ける。RAW decodeには optional `rawpy` が必要。GUIでは補正対象RAWを16bit、検査RAWを8bitフル解像度でdecodeし、debug中間画像を作らないことでメモリを抑える。エラー時は実行フォルダに `error.txt`、出力フォルダに `last_error.txt` を保存する。
 - ローカルHTMLテストUI: 実装済み。
-- テスト: 38件、pass確認済み。
+- テスト: 75件、pass確認済み。
 - README: 実装済み。
 - AGENTS.md: 実装済み。
 - Debug output: 実装済み。

@@ -13,4 +13,8 @@ test_outputs/
 pytest-cache-files-*/
 pywrite_probe/
 web_outputs/
+manual_outputs/
 benchmark_results/
+gui_outputs/
+output/
+web_server_*.log

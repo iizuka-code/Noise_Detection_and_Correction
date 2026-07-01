@@ -18,6 +18,25 @@ PNG_COLOR_CHANNELS = {
     4: 2,
     6: 4,
 }
+RAW_EXTENSIONS = {
+    ".3fr",
+    ".arw",
+    ".cr2",
+    ".cr3",
+    ".dng",
+    ".erf",
+    ".fff",
+    ".iiq",
+    ".nef",
+    ".orf",
+    ".pef",
+    ".raf",
+    ".raw",
+    ".rw2",
+    ".rwl",
+    ".srw",
+    ".x3f",
+}
 
 
 @dataclass(frozen=True)
@@ -29,7 +48,7 @@ class ImageData:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def read_image(path: str | Path) -> ImageData:
+def read_image(path: str | Path, *, raw_half_size: bool = False, raw_output_bps: int = 16) -> ImageData:
     image_path = Path(path)
     suffix = image_path.suffix.lower()
     if suffix == ".png":
@@ -58,6 +77,15 @@ def read_image(path: str | Path) -> ImageData:
             color_mode=color_mode_for_array(pixels),
             path=image_path,
             metadata={"format": "JPEG", "reader": "Pillow"},
+        )
+    if suffix in RAW_EXTENSIONS:
+        pixels, metadata = read_raw(image_path, half_size=raw_half_size, output_bps=raw_output_bps)
+        return ImageData(
+            pixels=pixels,
+            bit_depth=bit_depth_for_array(pixels),
+            color_mode=color_mode_for_array(pixels),
+            path=image_path,
+            metadata=metadata,
         )
     raise ValueError(f"Unsupported image extension: {suffix}")
 
@@ -248,6 +276,46 @@ def read_tiff(path: str | Path) -> tuple[np.ndarray, dict[str, Any]]:
 def read_jpeg(path: str | Path) -> np.ndarray:
     with Image.open(path) as image:
         return np.asarray(image.convert("RGB"))
+
+
+def read_raw(path: str | Path, *, half_size: bool = False, output_bps: int = 16) -> tuple[np.ndarray, dict[str, Any]]:
+    try:
+        import rawpy  # type: ignore
+    except ModuleNotFoundError as exc:
+        raise ValueError("RAW input requires optional dependency: rawpy. Install with: py -3.12 -m pip install -e .[raw]") from exc
+
+    image_path = Path(path)
+    requested_output_bps = 8 if int(output_bps) == 8 else 16
+    try:
+        output_color = rawpy.ColorSpace.sRGB
+        with rawpy.imread(str(image_path)) as raw:
+            pixels = raw.postprocess(
+                use_camera_wb=True,
+                output_color=output_color,
+                output_bps=requested_output_bps,
+                no_auto_bright=True,
+                half_size=bool(half_size),
+            )
+    except Exception as exc:  # noqa: BLE001 - include the source path in decode failures.
+        raise ValueError(f"Failed to decode RAW image {image_path}: {exc}") from exc
+
+    arr = np.asarray(pixels)
+    if arr.ndim != 3 or arr.shape[2] < 3:
+        raise ValueError(f"RAW decode did not produce RGB pixels: {arr.shape}")
+    arr = np.ascontiguousarray(arr[:, :, :3])
+    if arr.dtype not in (np.uint8, np.uint16):
+        arr = restore_dtype(as_float32(arr), np.uint16)
+    return arr, {
+        "format": "RAW",
+        "reader": "rawpy",
+        "raw_suffix": image_path.suffix.lower(),
+        "output_bps": int(16 if arr.dtype == np.uint16 else 8),
+        "requested_output_bps": requested_output_bps,
+        "output_color": "sRGB",
+        "use_camera_wb": True,
+        "no_auto_bright": True,
+        "half_size": bool(half_size),
+    }
 
 
 def write_tiff(path: str | Path, pixels: np.ndarray) -> None:
